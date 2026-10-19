@@ -75,6 +75,7 @@ Public Class FixedAssetsForm
         Me.AutoScaleMode = AutoScaleMode.Dpi
 
         BuildInterface()
+        CsvExportMenu.Attach(Me, Tuple.Create("Fixed Assets", assetsGrid))
 
         AddHandler Me.Shown, AddressOf FixedAssetsForm_Shown
     End Sub

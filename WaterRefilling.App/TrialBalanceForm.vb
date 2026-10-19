@@ -1,4 +1,4 @@
-Imports System.Net.Http
+﻿Imports System.Net.Http
 Imports System.Text.Json
 Imports System.Drawing
 Imports System.Linq
@@ -35,6 +35,7 @@ Public Class TrialBalanceForm
         Me.Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
+        CsvExportMenu.Attach(Me, Tuple.Create("Trial Balance", reportGrid))
 
         AddHandler Me.Load, AddressOf FormLoaded
         AddHandler refreshButton.Click, AddressOf RefreshButtonClicked

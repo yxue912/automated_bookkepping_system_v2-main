@@ -112,6 +112,7 @@ Public Class AuditTrailForm
         statusLabel.Text = "Loading audit records..."
 
         Controls.Add(grid)
+        CsvExportMenu.Attach(Me, Tuple.Create("Current Audit Trail Page", grid))
         Controls.Add(statusLabel)
         Controls.Add(top)
 

@@ -115,6 +115,7 @@ Public Class CashDisbursementsForm
         Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
+        CsvExportMenu.Attach(Me, Tuple.Create("Cash Disbursements", disbursementsGrid))
         AddHandler Shown, AddressOf FormShown
     End Sub
 

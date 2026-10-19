@@ -985,7 +985,7 @@ End Sub
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 32))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 48))
         root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 440))
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 575))
 
         Dim welcome As New Label With {
             .Text = "Welcome to Aqua ARC!",

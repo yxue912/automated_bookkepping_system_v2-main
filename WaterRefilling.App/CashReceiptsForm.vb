@@ -139,6 +139,7 @@ Public Class CashReceiptsForm
         Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
+        CsvExportMenu.Attach(Me, Tuple.Create("Cash Receipts", receiptsGrid))
         AddHandler Shown, AddressOf FormShown
     End Sub
 

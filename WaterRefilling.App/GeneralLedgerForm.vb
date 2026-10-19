@@ -1,4 +1,4 @@
-Imports System.Net.Http
+﻿Imports System.Net.Http
 Imports System.Text.Json
 Imports System.Drawing
 Imports System.Linq
@@ -38,6 +38,7 @@ Public Class GeneralLedgerForm
         Me.Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
+        CsvExportMenu.Attach(Me, Tuple.Create("Ledger Accounts", accountsGrid), Tuple.Create("General Ledger Entries", entriesGrid))
 
         AddHandler Me.Load, AddressOf LoadAccountsAsync
         AddHandler searchButton.Click, AddressOf SearchButtonClicked

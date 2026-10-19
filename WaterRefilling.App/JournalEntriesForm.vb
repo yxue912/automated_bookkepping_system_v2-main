@@ -1,4 +1,4 @@
-Imports System.Drawing
+﻿Imports System.Drawing
 Imports System.Linq
 Imports System.Net.Http
 Imports System.Text
@@ -31,6 +31,7 @@ Public Class JournalEntriesForm
         InitializeComponent()
         ConfigureEntriesGrid()
         ConfigureLinesGrid()
+        CsvExportMenu.Attach(Me, Tuple.Create("Journal Entries", entriesGrid), Tuple.Create("Selected Entry Lines", linesGrid))
 
         AddHandler Me.Load, AddressOf JournalEntriesForm_Load
         AddHandler refreshButton.Click, AddressOf RefreshButton_Click

@@ -1,9 +1,11 @@
-﻿Imports System
+Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Linq
 Imports System.Net.Http
 Imports System.Text
+Imports System.IO
+Imports Microsoft.VisualBasic.FileIO
 Imports System.Text.Json
 Imports System.Windows.Forms
 Imports System.Threading.Tasks
@@ -135,6 +137,11 @@ Public Class ChartOfAccountsForm
             formPanel, "Refresh List", 660, 175, 120,
             AddressOf RefreshButton_Click)
 
+        AddButton(formPanel, "Import CSV", 790, 175, 130,
+            AddressOf ImportAccountsCsvClicked)
+        AddButton(formPanel, "Export CSV", 930, 175, 130,
+            AddressOf ExportAccountsCsvClicked)
+
         ' Search controls
         searchInput = New TextBox With {
             .Location = New Point(20, 318),
@@ -225,6 +232,160 @@ Public Class ChartOfAccountsForm
         updateButton.Enabled = False
         deactivateButton.Enabled = False
     End Sub
+
+
+    Private Sub ExportAccountsCsvClicked(sender As Object, e As EventArgs)
+        Using dialog As New SaveFileDialog()
+            dialog.Title = "Export Chart of Accounts"
+            dialog.Filter = "CSV files (*.csv)|*.csv"
+            dialog.FileName = "ChartOfAccounts_" & DateTime.Now.ToString("yyyyMMdd") & ".csv"
+            dialog.DefaultExt = "csv"
+            dialog.AddExtension = True
+
+            If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
+
+            Try
+                Using writer As New StreamWriter(dialog.FileName, False, New UTF8Encoding(True))
+                    writer.WriteLine("account_code,account_name,account_type,account_group,description,is_active")
+                    For Each account In allAccounts
+                        writer.WriteLine(String.Join(",", New String() {
+                            CsvEscape(account.account_code),
+                            CsvEscape(account.account_name),
+                            CsvEscape(account.account_type),
+                            CsvEscape(account.account_group),
+                            CsvEscape(account.description),
+                            If(account.is_active, "true", "false")
+                        }))
+                    Next
+                End Using
+
+                MessageBox.Show("Chart of Accounts exported successfully.",
+                                "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As Exception
+                MessageBox.Show("Could not export accounts: " & ex.Message,
+                                "CSV Export Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
+        End Using
+    End Sub
+
+    Private Async Sub ImportAccountsCsvClicked(sender As Object, e As EventArgs)
+        Using dialog As New OpenFileDialog()
+            dialog.Title = "Import Chart of Accounts"
+            dialog.Filter = "CSV files (*.csv)|*.csv"
+            If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
+
+            Dim imported As New List(Of Dictionary(Of String, String))()
+            Dim fileCodes As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+            Try
+                Using parser As New TextFieldParser(dialog.FileName, Encoding.UTF8)
+                    parser.TextFieldType = FieldType.Delimited
+                    parser.SetDelimiters(",")
+                    parser.HasFieldsEnclosedInQuotes = True
+
+                    If parser.EndOfData Then Throw New Exception("The CSV file is empty.")
+                    Dim headers = parser.ReadFields()
+                    Dim required = {"account_code", "account_name", "account_type", "account_group", "description", "is_active"}
+                    For Each header In required
+                        If Not headers.Any(Function(h) String.Equals(h.Trim(), header, StringComparison.OrdinalIgnoreCase)) Then
+                            Throw New Exception("Missing required column: " & header)
+                        End If
+                    Next
+
+                    Dim indexes = required.ToDictionary(Function(h) h,
+                        Function(h) Array.FindIndex(headers, Function(x) String.Equals(x.Trim(), h, StringComparison.OrdinalIgnoreCase)),
+                        StringComparer.OrdinalIgnoreCase)
+
+                    Dim lineNumber As Integer = 1
+                    While Not parser.EndOfData
+                        lineNumber += 1
+                        Dim fields = parser.ReadFields()
+                        If fields Is Nothing OrElse fields.All(Function(x) String.IsNullOrWhiteSpace(x)) Then Continue While
+                        If fields.Length <> headers.Length Then
+                            Throw New Exception("Invalid column count at CSV row " & lineNumber.ToString() & ".")
+                        End If
+
+                        Dim code = fields(indexes("account_code")).Trim()
+                        Dim name = fields(indexes("account_name")).Trim()
+                        Dim accountType = fields(indexes("account_type")).Trim()
+                        Dim activeText = fields(indexes("is_active")).Trim()
+                        Dim active As Boolean
+
+                        If code = "" OrElse name = "" Then Throw New Exception("Account code and name are required at CSV row " & lineNumber.ToString() & ".")
+                        If Not {"Asset", "Liability", "Equity", "Revenue", "Expense"}.Contains(accountType, StringComparer.OrdinalIgnoreCase) Then
+                            Throw New Exception("Invalid account type at CSV row " & lineNumber.ToString() & ": " & accountType)
+                        End If
+                        If Not Boolean.TryParse(activeText, active) AndAlso activeText <> "1" AndAlso activeText <> "0" Then
+                            Throw New Exception("is_active must be true/false or 1/0 at CSV row " & lineNumber.ToString() & ".")
+                        End If
+                        If fileCodes.Contains(code) Then Throw New Exception("Duplicate account code in CSV: " & code)
+                        If allAccounts.Any(Function(a) String.Equals(a.account_code, code, StringComparison.OrdinalIgnoreCase)) Then
+                            Throw New Exception("Account code already exists in the system: " & code)
+                        End If
+                        fileCodes.Add(code)
+
+                        imported.Add(New Dictionary(Of String, String) From {
+                            {"account_code", code},
+                            {"account_name", name},
+                            {"account_type", accountType},
+                            {"account_group", fields(indexes("account_group")).Trim()},
+                            {"description", fields(indexes("description")).Trim()},
+                            {"is_active", If(activeText = "1", "true", If(activeText = "0", "false", activeText.ToLowerInvariant()))}
+                        })
+                    End While
+                End Using
+
+                If imported.Count = 0 Then Throw New Exception("The CSV contains no account rows to import.")
+
+                Dim confirm = MessageBox.Show(
+                    "Validation passed for " & imported.Count.ToString() & " account(s)." & Environment.NewLine &
+                    "No records will be imported if validation fails. Continue?",
+                    "Confirm Import", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                If confirm <> DialogResult.Yes Then Return
+
+                isBusy = True
+                UpdateSelectionButtons()
+                Dim created As Integer = 0
+
+                For Each row In imported
+                    Dim payload = New With {
+                        .account_code = row("account_code"),
+                        .account_name = row("account_name"),
+                        .account_type = row("account_type"),
+                        .account_group = If(row("account_group") = "", Nothing, row("account_group")),
+                        .description = If(row("description") = "", Nothing, row("description")),
+                        .is_active = Boolean.Parse(row("is_active"))
+                    }
+                    ApiSession.ApplyAuthorization()
+                    Using content As New StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+                        Using response = Await ApiSession.Client.PostAsync(ApiUrl, content)
+                            Dim responseBody = Await response.Content.ReadAsStringAsync()
+                            If Not response.IsSuccessStatusCode Then
+                                Throw New Exception("Import stopped after " & created.ToString() &
+                                    " account(s). Server rejected account " & row("account_code") & ": " & responseBody)
+                            End If
+                        End Using
+                    End Using
+                    created += 1
+                Next
+
+                Await LoadAccountsAsync()
+                MessageBox.Show(created.ToString() & " account(s) imported successfully.",
+                                "Import Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As Exception
+                MessageBox.Show("Import failed: " & ex.Message,
+                                "CSV Import Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Finally
+                isBusy = False
+                UpdateSelectionButtons()
+            End Try
+        End Using
+    End Sub
+
+    Private Function CsvEscape(value As String) As String
+        Dim safe = If(value, "")
+        Return """" & safe.Replace("""", """""") & """"
+    End Function
 
     Private Sub AddLabel(
         parent As Control,
