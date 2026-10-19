@@ -1,0 +1,32 @@
+# Laravel environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# PHP dependencies and generated files
+**/vendor/
+**/vendor.root-owned-backup/
+**/storage/*.key
+**/storage/framework/*.pid
+
+# SQLite database files
+**/database/*.sqlite
+**/database/*.sqlite-*
+
+# VB.NET build output
+**/bin/
+!/WaterRefilling.App/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.suo
+
+# Node dependencies and build output
+**/node_modules/
+
+# IDE and operating system files
+.DS_Store
+Thumbs.db
+
+# Local TiDB certificates
+/water-refilling-api/certs/

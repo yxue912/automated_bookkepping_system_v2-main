@@ -1,0 +1,13 @@
+# Local setup
+
+1. Clone the repository and enter `water-refilling-api/`. Install PHP 8.3+, Composer 2, Node/npm, and SQLite support as listed in [DEPENDENCIES.md](DEPENDENCIES.md). On Gentoo, use the normal package review process; this repository does not alter Portage configuration.
+2. Run `composer install` and `npm ci` against the checked-in lockfiles. Do not use the Composer `setup` script on an existing database because it runs migrations automatically.
+3. Copy `.env.example` to `.env` only if `.env` does not already exist. Run `php artisan key:generate` for a fresh local environment. Keep credentials out of Git.
+4. For a fresh disposable local database, create `database/database.sqlite` and keep `DB_CONNECTION=sqlite` in `.env`. Set `DB_DATABASE` to its absolute path if Laravel does not resolve the default. Never run `migrate:fresh` or `db:wipe` on a real database.
+5. Run `php artisan migrate`. The new migrations check legacy duplicate vouchers and disbursement/journal mismatches before changing schema. Reconcile any reported legacy records manually without altering posted history.
+6. Optionally set `AQUA_ARC_ADMIN_EMAIL`, `AQUA_ARC_ADMIN_NAME`, and a unique `AQUA_ARC_ADMIN_PASSWORD` of at least 12 characters in `.env`, then run `php artisan db:seed`. The account seeder creates only missing account codes and preserves customized existing accounts. Do not seed a production database without reviewing the environment and existing users.
+7. Keep `AQUA_ARC_ALLOW_REGISTRATION=false` for an internal installation. Administrators can provision the initial account through the seed variables. For a controlled registration window, explicitly set `AQUA_ARC_ALLOW_REGISTRATION=true`, clear cached configuration, complete onboarding, and set it back to false.
+8. Validate with `composer check-platform-reqs`, `php artisan route:list --path=api`, `php artisan test`, and `npm run build`. `phpunit.xml` uses disposable in-memory SQLite. Confirm `APP_ENV=testing` before running tests.
+9. On Windows, build the desktop with `dotnet build WaterRefilling.App/WaterRefilling.App.vbproj`. On Linux, review source and build assets, but do not claim a WinForms runtime test.
+
+The API's local default is `http://127.0.0.1:8000/api/`. The desktop reads `AQUA_ARC_API_BASE_URL` and uses this default when unset; set it to an absolute API URL ending in `/api/` for a backend on another machine. Use HTTPS for non-loopback deployments that carry passwords or bearer tokens. To launch a local-only API after setup, run `php artisan serve --host=127.0.0.1 --port=8000` from `water-refilling-api/`. Keep admin credentials outside the repository.
