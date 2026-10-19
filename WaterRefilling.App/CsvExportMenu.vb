@@ -48,8 +48,8 @@ Public Module CsvExportMenu
                 Else
                     ExportXlsx(dialog.FileName, grid, suggestedName)
                 End If
-                MessageBox.Show(owner, "Export completed successfully." & Environment.NewLine & dialog.FileName,
-                                "Aqua ARC", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                MessageBox.Show(owner, "The export was completed successfully.",
+                                "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information)
             Catch ex As Exception
                 MessageBox.Show(owner, "Unable to export data." & Environment.NewLine & ex.Message,
                                 "Aqua ARC", MessageBoxButtons.OK, MessageBoxIcon.Error)

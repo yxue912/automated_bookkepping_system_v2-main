@@ -56,7 +56,7 @@ Public Class GeneralLedgerForm
             .BackColor = Me.BackColor
         }
 
-        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 55))
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 76))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 100))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 42))
         root.RowStyles.Add(New RowStyle(SizeType.Percent, 48))
@@ -69,11 +69,24 @@ Public Class GeneralLedgerForm
             .ForeColor = Color.FromArgb(37, 91, 64),
             .TextAlign = ContentAlignment.MiddleLeft
         }
+        Dim heading As New Panel With {.Dock = DockStyle.Fill}
+        title.Dock = DockStyle.None
+        title.Location = New Point(0, 0)
+        title.Size = New Size(500, 38)
+        Dim subtitle As New Label With {
+            .Text = "Review account balances and posted transactions for a selected date range.",
+            .Font = New Font("Segoe UI", 9.5F),
+            .ForeColor = Color.FromArgb(95, 115, 101),
+            .AutoSize = True,
+            .Location = New Point(2, 40)
+        }
+        heading.Controls.Add(title)
+        heading.Controls.Add(subtitle)
         Dim titleBar As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 3, .RowCount = 1}
         titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
         titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
         titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
-        titleBar.Controls.Add(title, 0, 0)
+        titleBar.Controls.Add(heading, 0, 0)
         titleBar.Controls.Add(CsvExportMenu.CreateExportButton(Me, accountsGrid, "Ledger Accounts"), 1, 0)
         titleBar.Controls.Add(CsvExportMenu.CreateExportButton(Me, entriesGrid, "Ledger Entries"), 2, 0)
 

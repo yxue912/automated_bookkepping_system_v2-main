@@ -21,70 +21,28 @@ Public Class MainForm
     Private workspace As Panel
     Private pageTitle As Label
 
-    ' Notification controls
-    Private notificationButton As Panel
-    Private notificationBadge As Label
-    Private notificationPanel As Panel
-    Private notificationMessage As Label
-    Private notificationToolTip As ToolTip
-    Private notificationUnread As Boolean = True
-    Private notificationMessageText As String = ""
-
     Private transactionsExpanded As Boolean = False
     Private financialReportsExpanded As Boolean = False
-
     Private transactionsButton As Button
     Private financialReportsButton As Button
-
     Private ReadOnly transactionMenuButtons As New List(Of Button)
     Private ReadOnly financialReportMenuButtons As New List(Of Button)
     Private ReadOnly sidebarMenuButtons As New List(Of Button)
     Private ReadOnly summaryValues As New Dictionary(Of String, Label)()
     Private activityGrid As DataGridView
     Private dashboardNotice As Label
-    Private notificationClickFilter As NotificationOutsideClickFilter
 
-    Private Class NotificationOutsideClickFilter
-        Implements IMessageFilter
 
-        Private ReadOnly owner As MainForm
-
-        Public Sub New(form As MainForm)
-            owner = form
-        End Sub
-
-        Public Function PreFilterMessage(ByRef m As Message) As Boolean _
-            Implements IMessageFilter.PreFilterMessage
-
-            If m.Msg <> &H201 OrElse owner.IsDisposed Then
-                Return False
-            End If
-
-            If owner.NotificationPanelIsVisible() Then
-                Dim screenPoint As Point = Cursor.Position
-
-                If Not owner.NotificationBellScreenRectangle().Contains(screenPoint) AndAlso
-                Not owner.NotificationPanelScreenRectangle().Contains(screenPoint) Then
-
-                    owner.CloseNotificationPanel()
-                End If
-            End If
-
-            Return False
-        End Function
-    End Class
 
 Public Sub New()
         InitializeDashboard()
 
-        AddHandler AppNotifications.NotificationAdded,
-            AddressOf HandleAppNotification
     End Sub
 
     Private Sub InitializeDashboard()
         Text = "Aqua ARC - Water Station Bookkeeping"
         StartPosition = FormStartPosition.CenterScreen
-        Size = New Size(1440, 900)
+        WindowState = FormWindowState.Maximized
         MinimumSize = New Size(1100, 700)
         BackColor = pageBackground
         Font = New Font("Segoe UI", 10)
@@ -92,26 +50,12 @@ Public Sub New()
         BuildSidebar()
         BuildHeader()
         BuildDashboard()
-        SetLoginNotification()
-
-        notificationClickFilter = New NotificationOutsideClickFilter(Me)
-        Application.AddMessageFilter(notificationClickFilter)
 
         AddHandler Me.Shown,
             Async Sub(sender, e)
                 Await LoadDashboardAsync()
             End Sub
 
-        AddHandler Me.FormClosed,
-            Sub(sender, e)
-                If notificationClickFilter IsNot Nothing Then
-                    Application.RemoveMessageFilter(notificationClickFilter)
-                End If
-
-                If notificationToolTip IsNot Nothing Then
-                    notificationToolTip.Dispose()
-                End If
-            End Sub
     End Sub
 
     ' =========================================================
@@ -645,217 +589,13 @@ End Sub
         MakeRounded(period, 10)
         header.Controls.Add(period)
 
-        notificationToolTip = New ToolTip With {
-            .InitialDelay = 350,
-            .ReshowDelay = 100,
-            .AutoPopDelay = 4000,
-            .ShowAlways = True
-        }
-
-        notificationButton = New Panel With {
-            .Size = New Size(42, 38),
-            .BackColor = Color.White,
-            .Cursor = Cursors.Hand,
-            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
-            .Location = New Point(period.Left - 55, 17),
-            .AccessibleName = "Notifications"
-        }
-
-        AddHandler notificationButton.Paint,
-            Sub(sender, e)
-                DrawBellIcon(e.Graphics, notificationButton.ClientRectangle)
-            End Sub
-
-        AddHandler notificationButton.MouseEnter,
-            Sub(sender, e)
-                notificationButton.BackColor =
-                    Color.FromArgb(232, 242, 244)
-                notificationButton.Invalidate()
-            End Sub
-
-        AddHandler notificationButton.MouseLeave,
-            Sub(sender, e)
-                notificationButton.BackColor = Color.White
-                notificationButton.Invalidate()
-            End Sub
-
-        AddHandler notificationButton.Click,
-            Sub(sender, e)
-                ToggleNotificationPanel()
-            End Sub
-
-        notificationToolTip.SetToolTip(
-            notificationButton,
-            "View notifications")
-
-        header.Controls.Add(notificationButton)
-
-        notificationBadge = New Label With {
-            .Text = "1",
-            .Size = New Size(18, 18),
-            .Location = New Point(27, 0),
-            .BackColor = Color.FromArgb(210, 55, 55),
-            .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 8, FontStyle.Bold),
-            .TextAlign = ContentAlignment.MiddleCenter
-        }
-
-        MakeRounded(notificationBadge, 9)
-        notificationButton.Controls.Add(notificationBadge)
-        notificationBadge.BringToFront()
-
-        notificationPanel = New Panel With {
-            .Size = New Size(330, 155),
-            .BackColor = Color.White,
-            .BorderStyle = BorderStyle.FixedSingle,
-            .Visible = False
-        }
-
-        Dim notificationHeading As New Label With {
-            .Text = "Notifications",
-            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
-            .ForeColor = deepGreen,
-            .Location = New Point(15, 12),
-            .AutoSize = True
-        }
-
-        notificationPanel.Controls.Add(notificationHeading)
-
-        notificationMessage = New Label With {
-            .Location = New Point(15, 45),
-            .Size = New Size(295, 60),
-            .Font = New Font("Segoe UI", 9),
-            .ForeColor = textColor,
-            .TextAlign = ContentAlignment.TopLeft
-        }
-
-        notificationPanel.Controls.Add(notificationMessage)
-
-        Dim markReadButton As New Button With {
-            .Text = "Mark as read",
-            .Size = New Size(100, 30),
-            .Location = New Point(205, 112),
-            .BackColor = Color.FromArgb(232, 242, 244),
-            .ForeColor = deepGreen,
-            .FlatStyle = FlatStyle.Flat,
-            .Cursor = Cursors.Hand
-        }
-
-        markReadButton.FlatAppearance.BorderSize = 0
-        notificationPanel.Controls.Add(markReadButton)
-
-        AddHandler markReadButton.Click,
-            Sub(sender, e)
-                notificationUnread = False
-                UpdateNotificationBadge()
-                CloseNotificationPanel()
-            End Sub
-
-        Controls.Add(notificationPanel)
-        notificationPanel.BringToFront()
-
         AddHandler header.Resize,
             Sub(sender, e)
-                period.Left = header.ClientSize.Width -
-                              period.Width - 25
-
-                notificationButton.Left = period.Left - 55
+                period.Left = header.ClientSize.Width - period.Width - 25
             End Sub
     End Sub
 
-    Private Sub DrawBellIcon(
-        graphics As Graphics,
-        bounds As Rectangle)
 
-        graphics.SmoothingMode = SmoothingMode.AntiAlias
-
-        Using bellPen As New Pen(deepGreen, 2.2F)
-            bellPen.StartCap = LineCap.Round
-            bellPen.EndCap = LineCap.Round
-
-            Dim centerX As Single = bounds.Width / 2.0F
-            Dim topY As Single = 7.0F
-
-            Using bellPath As New GraphicsPath()
-                bellPath.AddArc(
-                    centerX - 8,
-                    topY,
-                    16,
-                    19,
-                    180,
-                    180)
-
-                bellPath.AddLine(
-                    centerX + 8,
-                    topY + 9,
-                    centerX + 8,
-                    topY + 19)
-
-                bellPath.AddLine(
-                    centerX + 8,
-                    topY + 19,
-                    centerX + 11,
-                    topY + 22)
-
-                bellPath.AddLine(
-                    centerX + 11,
-                    topY + 22,
-                    centerX - 11,
-                    topY + 22)
-
-                bellPath.AddLine(
-                    centerX - 11,
-                    topY + 22,
-                    centerX - 8,
-                    topY + 19)
-
-                bellPath.AddLine(
-                    centerX - 8,
-                    topY + 19,
-                    centerX - 8,
-                    topY + 9)
-
-                graphics.DrawPath(bellPen, bellPath)
-            End Using
-
-            graphics.DrawArc(
-                bellPen,
-                centerX - 4,
-                topY + 18,
-                8,
-                6,
-                0,
-                180)
-
-            graphics.DrawLine(
-                bellPen,
-                centerX - 3,
-                topY + 27,
-                centerX + 3,
-                topY + 27)
-        End Using
-    End Sub
-
-    Private Sub SetLoginNotification()
-        Dim roleLabel As String = "Authorized User"
-
-        If ApiSession.CurrentUserRoles IsNot Nothing AndAlso
-           ApiSession.CurrentUserRoles.Count > 0 Then
-
-            roleLabel = GetDisplayRole(ApiSession.CurrentUserRoles)
-        End If
-
-        notificationMessageText =
-            "You have successfully signed in as " &
-            roleLabel & "."
-
-        If notificationMessage IsNot Nothing Then
-            notificationMessage.Text = notificationMessageText
-        End If
-
-        notificationUnread = True
-        UpdateNotificationBadge()
-    End Sub
 
     Private Function GetDisplayRole(roles As List(Of String)) As String
         If roles Is Nothing OrElse roles.Count = 0 Then
@@ -876,79 +616,6 @@ End Sub
         End Select
     End Function
 
-    Private Sub ToggleNotificationPanel()
-        If notificationPanel Is Nothing OrElse
-           notificationButton Is Nothing Then
-            Return
-        End If
-
-        If notificationPanel.Visible Then
-            CloseNotificationPanel()
-            Return
-        End If
-
-        notificationMessage.Text = notificationMessageText
-
-        Dim screenLocation As Point =
-            notificationButton.PointToScreen(
-                New Point(0, notificationButton.Height))
-
-        notificationPanel.Location = PointToClient(screenLocation)
-
-        notificationPanel.Left = Math.Max(
-            10,
-            Math.Min(
-                notificationPanel.Left,
-                ClientSize.Width - notificationPanel.Width - 10))
-
-        notificationPanel.Top = Math.Max(75, notificationPanel.Top)
-
-        notificationPanel.Visible = True
-        notificationPanel.BringToFront()
-    End Sub
-
-    Private Sub UpdateNotificationBadge()
-        If notificationBadge Is Nothing Then Return
-
-        notificationBadge.Visible = notificationUnread
-        notificationBadge.Text = If(notificationUnread, "1", "")
-    End Sub
-
-    Private Sub CloseNotificationPanel()
-        If notificationPanel IsNot Nothing Then
-            notificationPanel.Visible = False
-        End If
-    End Sub
-
-    Private Function NotificationPanelIsVisible() As Boolean
-        Return notificationPanel IsNot Nothing AndAlso
-               notificationPanel.Visible
-    End Function
-
-    Private Function NotificationBellScreenRectangle() As Rectangle
-        If notificationButton Is Nothing Then Return Rectangle.Empty
-
-        Return notificationButton.RectangleToScreen(
-            notificationButton.ClientRectangle)
-    End Function
-
-    Private Function NotificationPanelScreenRectangle() As Rectangle
-        If notificationPanel Is Nothing Then Return Rectangle.Empty
-
-        Return notificationPanel.RectangleToScreen(
-            notificationPanel.ClientRectangle)
-    End Function
-
-    Private Function NotificationPanelContainsScreenPoint(
-        screenPoint As Point) As Boolean
-
-        If notificationPanel Is Nothing OrElse Not notificationPanel.Visible Then
-            Return False
-        End If
-
-        Return NotificationPanelScreenRectangle().Contains(screenPoint)
-    End Function
-
     Private Sub BuildDashboard()
         workspace = New Panel With {
             .Dock = DockStyle.Fill,
@@ -961,10 +628,6 @@ End Sub
         workspace.BringToFront()
 
         BuildDashboardContent()
-
-        If notificationPanel IsNot Nothing Then
-            notificationPanel.BringToFront()
-        End If
     End Sub
 
     Private Sub BuildDashboardContent()
@@ -2124,36 +1787,6 @@ End Sub
         updateRegion()
     End Sub
 
-Private Sub HandleAppNotification(
-    notification As AppNotifications.NotificationItem)
-
-    If Me.IsDisposed OrElse notification Is Nothing Then Return
-
-    If Me.InvokeRequired Then
-        Me.BeginInvoke(
-            New Action(
-                Sub()
-                    HandleAppNotification(notification)
-                End Sub))
-        Return
-    End If
-
-    notificationMessageText =
-        notification.Title & ": " & notification.Message
-
-    notificationUnread = True
-
-    If notificationBadge IsNot Nothing Then
-        notificationBadge.Text =
-            AppNotifications.GetUnreadCount().ToString()
-        notificationBadge.Visible = True
-    End If
-
-    If notificationMessage IsNot Nothing Then
-        notificationMessage.Text = notificationMessageText
-    End If
-
-End Sub
 
 Private Async Sub LogoutButton_Click(
     sender As Object,

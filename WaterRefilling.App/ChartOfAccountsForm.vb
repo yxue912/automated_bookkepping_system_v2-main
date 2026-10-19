@@ -29,6 +29,7 @@ Public Class ChartOfAccountsForm
     Private createButton As Button
     Private updateButton As Button
     Private deactivateButton As Button
+    Private reactivateButton As Button
     Private clearButton As Button
     Private refreshButton As Button
 
@@ -118,28 +119,32 @@ Public Class ChartOfAccountsForm
         formPanel.Controls.Add(chkActive)
 
         createButton = AddButton(
-            formPanel, "Create Account", 15, 175, 155,
+            formPanel, "Create Account", 15, 175, 135,
             AddressOf CreateButton_Click)
 
         updateButton = AddButton(
-            formPanel, "Update Selected", 180, 175, 155,
+            formPanel, "Update Selected", 160, 175, 145,
             AddressOf UpdateButton_Click)
 
         deactivateButton = AddButton(
-            formPanel, "Deactivate Selected", 345, 175, 175,
+            formPanel, "Deactivate", 315, 175, 145,
             AddressOf DeactivateButton_Click)
 
+        reactivateButton = AddButton(
+            formPanel, "Reactivate", 470, 175, 130,
+            AddressOf ReactivateButton_Click)
+
         clearButton = AddButton(
-            formPanel, "Clear Form", 530, 175, 120,
+            formPanel, "Clear Form", 610, 175, 105,
             AddressOf ClearButton_Click)
 
         refreshButton = AddButton(
-            formPanel, "Refresh List", 660, 175, 120,
+            formPanel, "Refresh List", 725, 175, 115,
             AddressOf RefreshButton_Click)
 
-        AddButton(formPanel, "Import CSV", 790, 175, 130,
+        AddButton(formPanel, "Import CSV", 850, 175, 105,
             AddressOf ImportAccountsCsvClicked)
-        AddButton(formPanel, "Export CSV", 930, 175, 130,
+        AddButton(formPanel, "Export CSV", 965, 175, 105,
             AddressOf ExportAccountsCsvClicked)
 
         ' Search controls
@@ -226,11 +231,14 @@ Public Class ChartOfAccountsForm
 
         AddHandler accountsGrid.SelectionChanged,
             AddressOf AccountsGrid_SelectionChanged
+        AddHandler accountsGrid.CellClick,
+            AddressOf AccountsGrid_CellClick
 
         Me.Controls.Add(accountsGrid)
 
         updateButton.Enabled = False
         deactivateButton.Enabled = False
+        reactivateButton.Enabled = False
     End Sub
 
 
@@ -591,6 +599,15 @@ Public Class ChartOfAccountsForm
                value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
     End Function
 
+    Private Sub AccountsGrid_CellClick(sender As Object, e As DataGridViewCellEventArgs)
+        If e.RowIndex < 0 OrElse e.RowIndex >= accountsGrid.Rows.Count Then Return
+
+        accountsGrid.ClearSelection()
+        accountsGrid.Rows(e.RowIndex).Selected = True
+        accountsGrid.CurrentCell = accountsGrid.Rows(e.RowIndex).Cells("account_code")
+        AccountsGrid_SelectionChanged(sender, EventArgs.Empty)
+    End Sub
+
     Private Sub AccountsGrid_SelectionChanged(sender As Object, e As EventArgs)
         If accountsGrid.CurrentRow Is Nothing OrElse
            accountsGrid.CurrentRow.DataBoundItem Is Nothing Then
@@ -635,6 +652,10 @@ Public Class ChartOfAccountsForm
     End Sub
 
     Private Async Sub UpdateButton_Click(sender As Object, e As EventArgs)
+        If selectedAccountId <= 0 AndAlso accountsGrid.CurrentRow IsNot Nothing Then
+            AccountsGrid_SelectionChanged(accountsGrid, EventArgs.Empty)
+        End If
+
         If selectedAccountId <= 0 Then
             ShowValidation("Select an account from the table first.")
             Return
@@ -656,6 +677,62 @@ Public Class ChartOfAccountsForm
             ApiUrl & "/" & selectedAccountId.ToString(),
             payload,
             "Account updated successfully.")
+    End Sub
+
+    Private Async Sub ReactivateButton_Click(sender As Object, e As EventArgs)
+        If selectedAccountId <= 0 AndAlso accountsGrid.CurrentRow IsNot Nothing Then
+            AccountsGrid_SelectionChanged(accountsGrid, EventArgs.Empty)
+        End If
+
+        If selectedAccountId <= 0 Then
+            ShowValidation("Select the inactive account from the table first.")
+            Return
+        End If
+
+        If chkActive.Checked Then
+            MessageBox.Show(
+                "This account is already marked active.",
+                "Aqua ARC",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information)
+            Return
+        End If
+
+        If Not ValidateForm() Then Return
+
+        Dim answer As DialogResult = MessageBox.Show(
+            "Reactivate this account?" & Environment.NewLine &
+            Environment.NewLine &
+            "Account: " & txtCode.Text.Trim() & " - " &
+            txtName.Text.Trim() & Environment.NewLine &
+            Environment.NewLine &
+            "The account will become available for future use. Existing accounting history will be preserved.",
+            "Confirm Account Reactivation",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button2)
+
+        If answer <> DialogResult.Yes Then
+            statusLabel.Text = "Reactivation cancelled."
+            Return
+        End If
+
+        chkActive.Checked = True
+
+        Dim payload = New With {
+            .account_code = txtCode.Text.Trim(),
+            .account_name = txtName.Text.Trim(),
+            .account_type = cboType.Text,
+            .account_group = NullIfBlank(txtGroup.Text),
+            .description = NullIfBlank(txtDescription.Text),
+            .is_active = True
+        }
+
+        Await SendAccountRequestAsync(
+            HttpMethod.Put,
+            ApiUrl & "/" & selectedAccountId.ToString(),
+            payload,
+            "Account reactivated successfully.")
     End Sub
 
     Private Async Sub DeactivateButton_Click(sender As Object, e As EventArgs)
@@ -830,6 +907,7 @@ Public Class ChartOfAccountsForm
     Private Sub UpdateSelectionButtons()
         If updateButton Is Nothing OrElse
            deactivateButton Is Nothing OrElse
+           reactivateButton Is Nothing OrElse
            createButton Is Nothing OrElse
            clearButton Is Nothing OrElse
            refreshButton Is Nothing Then
@@ -847,6 +925,11 @@ Public Class ChartOfAccountsForm
                                    Not isBusy AndAlso
                                    Not isLoading
 
+        reactivateButton.Enabled = hasSelection AndAlso
+                                   Not chkActive.Checked AndAlso
+                                   Not isBusy AndAlso
+                                   Not isLoading
+
         createButton.Enabled = Not isBusy AndAlso Not isLoading
         clearButton.Enabled = Not isBusy AndAlso Not isLoading
         refreshButton.Enabled = Not isBusy AndAlso Not isLoading
@@ -860,6 +943,10 @@ Public Class ChartOfAccountsForm
         deactivateButton.Enabled = enabled AndAlso
                                    selectedAccountId > 0 AndAlso
                                    chkActive.Checked AndAlso
+                                   Not isLoading
+        reactivateButton.Enabled = enabled AndAlso
+                                   selectedAccountId > 0 AndAlso
+                                   Not chkActive.Checked AndAlso
                                    Not isLoading
         clearButton.Enabled = enabled AndAlso Not isLoading
         refreshButton.Enabled = enabled AndAlso Not isLoading

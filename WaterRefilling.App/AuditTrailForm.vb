@@ -27,9 +27,32 @@ Public Class AuditTrailForm
         MinimumSize = New Size(900, 560)
         Size = New Size(1100, 680)
 
+        Dim heading As New Panel With {
+            .Dock = DockStyle.Top,
+            .Height = 76,
+            .Padding = New Padding(14, 8, 10, 4),
+            .BackColor = Color.FromArgb(245, 250, 246)
+        }
+        Dim title As New Label With {
+            .Text = "Audit Trail",
+            .Font = New Font("Segoe UI", 20.0F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(35, 90, 60),
+            .AutoSize = True,
+            .Location = New Point(14, 4)
+        }
+        Dim subtitle As New Label With {
+            .Text = "Review user activity, security events, and changes recorded by the system.",
+            .Font = New Font("Segoe UI", 9.5F),
+            .ForeColor = Color.FromArgb(95, 115, 101),
+            .AutoSize = True,
+            .Location = New Point(16, 43)
+        }
+        heading.Controls.Add(title)
+        heading.Controls.Add(subtitle)
+
         Dim top As New FlowLayoutPanel With {
             .Dock = DockStyle.Top,
-            .Height = 78,
+            .Height = 58,
             .Padding = New Padding(10),
             .WrapContents = True
         }
@@ -115,6 +138,7 @@ Public Class AuditTrailForm
         Controls.Add(grid)
         Controls.Add(statusLabel)
         Controls.Add(top)
+        Controls.Add(heading)
 
         AddHandler Shown,
             Async Sub(sender, e)

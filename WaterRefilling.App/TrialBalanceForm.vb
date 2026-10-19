@@ -52,7 +52,7 @@ Public Class TrialBalanceForm
             .BackColor = Me.BackColor
         }
 
-        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 55))
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 76))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 45))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 45))
         root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
@@ -65,6 +65,20 @@ Public Class TrialBalanceForm
             .ForeColor = Color.FromArgb(37, 91, 64),
             .TextAlign = ContentAlignment.MiddleLeft
         }
+
+        Dim heading As New Panel With {.Dock = DockStyle.Fill}
+        title.Dock = DockStyle.None
+        title.Location = New Point(0, 0)
+        title.Size = New Size(500, 38)
+        Dim subtitle As New Label With {
+            .Text = "Compare debit and credit balances across all accounts for the current ledger data.",
+            .Font = New Font("Segoe UI", 9.5F),
+            .ForeColor = Color.FromArgb(95, 115, 101),
+            .AutoSize = True,
+            .Location = New Point(2, 40)
+        }
+        heading.Controls.Add(title)
+        heading.Controls.Add(subtitle)
 
         refreshButton.Text = "Refresh Report"
         refreshButton.Size = New Size(140, 34)
@@ -145,7 +159,7 @@ Public Class TrialBalanceForm
         summaryPanel.Controls.Add(totalsLabel, 0, 0)
         summaryPanel.Controls.Add(statusLabel, 0, 1)
 
-        root.Controls.Add(title, 0, 0)
+        root.Controls.Add(heading, 0, 0)
         root.Controls.Add(toolbar, 0, 1)
         root.Controls.Add(searchPanel, 0, 2)
         root.Controls.Add(reportGrid, 0, 3)

@@ -39,7 +39,7 @@ Public Class JournalEntriesForm
     End Sub
 
     Private Sub InitializeComponent()
-        Me.Text = "Journal Entries"
+        Me.Text = "Journal Entries"      
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.Size = New Size(1200, 750)
         Me.MinimumSize = New Size(900, 600)
@@ -53,29 +53,29 @@ Public Class JournalEntriesForm
         titleLabel.Size = New Size(500, 40)
 
         refreshButton.Text = "Refresh"
-        refreshButton.Location = New Point(910, 20)
-        refreshButton.Size = New Size(110, 35)
-        refreshButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        refreshButton.Location = New Point(20, 62)
+        refreshButton.Size = New Size(100, 35)
+        refreshButton.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         StyleButton(refreshButton, Color.FromArgb(55, 130, 85))
 
         postButton.Text = "Post Entry"
-        postButton.Location = New Point(1030, 20)
-        postButton.Size = New Size(130, 35)
-        postButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        postButton.Location = New Point(125, 62)
+        postButton.Size = New Size(115, 35)
+        postButton.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         StyleButton(postButton, Color.FromArgb(35, 90, 60))
 
         Dim exportEntriesButton = CsvExportMenu.CreateExportButton(Me, entriesGrid, "Journal Entries")
-        exportEntriesButton.Location = New Point(625, 20)
-        exportEntriesButton.Size = New Size(135, 35)
-        exportEntriesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        exportEntriesButton.Location = New Point(245, 62)
+        exportEntriesButton.Size = New Size(180, 35)
+        exportEntriesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         Dim exportLinesButton = CsvExportMenu.CreateExportButton(Me, linesGrid, "Selected Entry Lines")
-        exportLinesButton.Location = New Point(765, 20)
-        exportLinesButton.Size = New Size(140, 35)
-        exportLinesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        exportLinesButton.Location = New Point(450, 62)
+        exportLinesButton.Size = New Size(220, 35)
+        exportLinesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         postButton.Enabled = False
 
-        statusLabel.Location = New Point(20, 60)
-        statusLabel.Size = New Size(1120, 30)
+        statusLabel.Location = New Point(20, 112)
+        statusLabel.Size = New Size(1120, 25)
         statusLabel.ForeColor = Color.FromArgb(80, 90, 80)
         statusLabel.Anchor =
             AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
@@ -84,12 +84,12 @@ Public Class JournalEntriesForm
             .Text = "Journal Entry Records",
             .Font = New Font("Segoe UI", 12.0F, FontStyle.Bold),
             .ForeColor = Color.FromArgb(35, 90, 60),
-            .Location = New Point(20, 95),
+            .Location = New Point(20, 148),
             .Size = New Size(400, 25)
         }
 
-        entriesGrid.Location = New Point(20, 125)
-        entriesGrid.Size = New Size(1140, 250)
+        entriesGrid.Location = New Point(20, 178)
+        entriesGrid.Size = New Size(1140, 215)
         entriesGrid.Anchor =
             AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         entriesGrid.BackgroundColor = Color.White
@@ -97,11 +97,11 @@ Public Class JournalEntriesForm
         detailsLabel.Text = "Selected Entry Details"
         detailsLabel.Font = New Font("Segoe UI", 12.0F, FontStyle.Bold)
         detailsLabel.ForeColor = Color.FromArgb(35, 90, 60)
-        detailsLabel.Location = New Point(20, 395)
+        detailsLabel.Location = New Point(20, 403)
         detailsLabel.Size = New Size(500, 25)
 
-        linesGrid.Location = New Point(20, 425)
-        linesGrid.Size = New Size(1140, 250)
+        linesGrid.Location = New Point(20, 433)
+        linesGrid.Size = New Size(1140, 247)
         linesGrid.Anchor =
             AnchorStyles.Top Or AnchorStyles.Bottom Or
             AnchorStyles.Left Or AnchorStyles.Right

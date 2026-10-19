@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Globalization
@@ -18,7 +18,9 @@ Public Class FixedAssetsForm
 
     Private ReadOnly assetCodeInput As New TextBox()
     Private ReadOnly nameInput As New TextBox()
-    Private ReadOnly categoryInput As New ComboBox()
+    Private ReadOnly categoryInput As New TextBox()
+    Private ReadOnly categorySelectButton As New Button()
+    Private ReadOnly selectedAssetCategories As New List(Of String)()
     Private ReadOnly acquisitionDateInput As New DateTimePicker()
     Private ReadOnly acquisitionCostInput As New TextBox()
     Private ReadOnly usefulLifeInput As New TextBox()
@@ -31,6 +33,8 @@ Public Class FixedAssetsForm
     Private ReadOnly assetsGrid As New DataGridView()
     Private ReadOnly assetSearchInput As New TextBox()
     Private ReadOnly clearSearchButton As New Button()
+    Private ReadOnly categoryFilterButton As New Button()
+    Private ReadOnly selectedCategoryFilters As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
     Private ReadOnly statusLabel As New Label()
 
     Private ReadOnly saveButton As New Button()
@@ -163,12 +167,35 @@ Public Class FixedAssetsForm
         ConfigureTextBox(locationInput)
         ConfigureTextBox(accountIdInput)
 
-        categoryInput.DropDownStyle = ComboBoxStyle.DropDownList
         categoryInput.Dock = DockStyle.Fill
         categoryInput.Font = New Font("Segoe UI", 9.5F)
         categoryInput.BackColor = Color.White
         categoryInput.ForeColor = textColor
-        categoryInput.Items.AddRange(assetCategories)
+        categoryInput.ReadOnly = True
+        categoryInput.PlaceholderText = "Select one or more categories"
+        categoryInput.Margin = New Padding(3, 8, 6, 8)
+
+        categorySelectButton.Text = "Select..."
+        categorySelectButton.Dock = DockStyle.Fill
+        categorySelectButton.Font = New Font("Segoe UI", 9.0F)
+        categorySelectButton.BackColor = primaryGreen
+        categorySelectButton.ForeColor = Color.White
+        categorySelectButton.FlatStyle = FlatStyle.Flat
+        categorySelectButton.FlatAppearance.BorderSize = 0
+        categorySelectButton.Margin = New Padding(0, 8, 10, 8)
+        AddHandler categorySelectButton.Click, AddressOf CategorySelectButton_Click
+
+        Dim categoryPanel As New TableLayoutPanel With {
+            .Dock = DockStyle.Fill,
+            .ColumnCount = 2,
+            .RowCount = 1,
+            .BackColor = Color.White,
+            .Margin = New Padding(0)
+        }
+        categoryPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+        categoryPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 92))
+        categoryPanel.Controls.Add(categoryInput, 0, 0)
+        categoryPanel.Controls.Add(categorySelectButton, 1, 0)
 
         acquisitionDateInput.Dock = DockStyle.Fill
         acquisitionDateInput.Font = New Font("Segoe UI", 9.5F)
@@ -189,7 +216,7 @@ Public Class FixedAssetsForm
 
         AddField(editorLayout, "Asset Code *", assetCodeInput, 0, 0)
         AddField(editorLayout, "Asset Name *", nameInput, 2, 0)
-        AddField(editorLayout, "Category *", categoryInput, 0, 1)
+        AddField(editorLayout, "Category *", categoryPanel, 0, 1)
         AddField(editorLayout, "Acquisition Date", acquisitionDateInput, 2, 1)
         AddField(editorLayout, "Acquisition Cost *", acquisitionCostInput, 0, 2)
         AddField(editorLayout, "Useful Life (Years) *", usefulLifeInput, 2, 2)
@@ -246,7 +273,7 @@ Public Class FixedAssetsForm
         ' Search bar
         Dim searchPanel As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
-            .ColumnCount = 2,
+            .ColumnCount = 3,
             .RowCount = 1,
             .BackColor = Color.White,
             .Margin = New Padding(0, 0, 0, 4)
@@ -254,7 +281,8 @@ Public Class FixedAssetsForm
 
         searchPanel.ColumnStyles.Add(
             New ColumnStyle(SizeType.Percent, 100))
-
+        searchPanel.ColumnStyles.Add(
+            New ColumnStyle(SizeType.Absolute, 165))
         searchPanel.ColumnStyles.Add(
             New ColumnStyle(SizeType.Absolute, 115))
 
@@ -264,7 +292,16 @@ Public Class FixedAssetsForm
         assetSearchInput.PlaceholderText =
             "Search asset code, name, or category..."
 
-        clearSearchButton.Text = "Clear Search"
+        categoryFilterButton.Text = "Filter Categories"
+        categoryFilterButton.Dock = DockStyle.Fill
+        categoryFilterButton.Margin = New Padding(0, 4, 8, 4)
+        categoryFilterButton.BackColor = Color.FromArgb(23, 107, 58)
+        categoryFilterButton.ForeColor = Color.White
+        categoryFilterButton.FlatStyle = FlatStyle.Flat
+        categoryFilterButton.FlatAppearance.BorderSize = 0
+        categoryFilterButton.Cursor = Cursors.Hand
+
+        clearSearchButton.Text = "Clear Filters"
         clearSearchButton.Dock = DockStyle.Fill
         clearSearchButton.Margin = New Padding(0, 4, 0, 4)
         clearSearchButton.BackColor = Color.FromArgb(100, 116, 106)
@@ -274,7 +311,10 @@ Public Class FixedAssetsForm
         clearSearchButton.Cursor = Cursors.Hand
 
         searchPanel.Controls.Add(assetSearchInput, 0, 0)
-        searchPanel.Controls.Add(clearSearchButton, 1, 0)
+        searchPanel.Controls.Add(categoryFilterButton, 1, 0)
+        searchPanel.Controls.Add(clearSearchButton, 2, 0)
+
+        AddHandler categoryFilterButton.Click, AddressOf CategoryFilterButton_Click
 
         ConfigureGrid()
 
@@ -536,6 +576,122 @@ Public Class FixedAssetsForm
         End If
     End Sub
 
+    Private Sub CategoryFilterButton_Click(sender As Object, e As EventArgs)
+        Using dialog As New Form()
+            dialog.Text = "Filter Fixed Assets by Category"
+            dialog.StartPosition = FormStartPosition.CenterParent
+            dialog.FormBorderStyle = FormBorderStyle.FixedDialog
+            dialog.MinimizeBox = False
+            dialog.MaximizeBox = False
+            dialog.ShowInTaskbar = False
+            dialog.ClientSize = New Size(430, 500)
+            dialog.BackColor = Color.White
+            dialog.Font = New Font("Segoe UI", 9.5F)
+
+            Dim heading As New Label With {
+                .Text = "Select one or more categories",
+                .Font = New Font("Segoe UI", 13.0F, FontStyle.Bold),
+                .ForeColor = deepGreen,
+                .Location = New Point(18, 16),
+                .Size = New Size(390, 28)
+            }
+            dialog.Controls.Add(heading)
+
+            Dim hint As New Label With {
+                .Text = "Assets matching any selected category will be shown. Leave all unchecked to show every category.",
+                .ForeColor = Color.FromArgb(95, 115, 101),
+                .Location = New Point(18, 48),
+                .Size = New Size(390, 38)
+            }
+            dialog.Controls.Add(hint)
+
+            Dim categoryList As New CheckedListBox With {
+                .Location = New Point(18, 92),
+                .Size = New Size(394, 320),
+                .CheckOnClick = True,
+                .BorderStyle = BorderStyle.FixedSingle,
+                .Font = New Font("Segoe UI", 9.5F),
+                .IntegralHeight = False
+            }
+
+            For Each category As String In assetCategories
+                Dim index As Integer = categoryList.Items.Add(category)
+                If selectedCategoryFilters.Contains(category) Then
+                    categoryList.SetItemChecked(index, True)
+                End If
+            Next
+            dialog.Controls.Add(categoryList)
+
+            Dim selectAllButton As New Button With {
+                .Text = "Select All",
+                .Location = New Point(18, 425),
+                .Size = New Size(95, 34),
+                .FlatStyle = FlatStyle.Flat
+            }
+            AddHandler selectAllButton.Click,
+                Sub()
+                    For i As Integer = 0 To categoryList.Items.Count - 1
+                        categoryList.SetItemChecked(i, True)
+                    Next
+                End Sub
+            dialog.Controls.Add(selectAllButton)
+
+            Dim clearButton As New Button With {
+                .Text = "Clear",
+                .Location = New Point(120, 425),
+                .Size = New Size(80, 34),
+                .FlatStyle = FlatStyle.Flat
+            }
+            AddHandler clearButton.Click,
+                Sub()
+                    For i As Integer = 0 To categoryList.Items.Count - 1
+                        categoryList.SetItemChecked(i, False)
+                    Next
+                End Sub
+            dialog.Controls.Add(clearButton)
+
+            Dim cancelButton As New Button With {
+                .Text = "Cancel",
+                .Location = New Point(225, 425),
+                .Size = New Size(85, 34),
+                .DialogResult = DialogResult.Cancel,
+                .FlatStyle = FlatStyle.Flat
+            }
+            dialog.Controls.Add(cancelButton)
+
+            Dim applyButton As New Button With {
+                .Text = "Apply",
+                .Location = New Point(320, 425),
+                .Size = New Size(92, 34),
+                .BackColor = primaryGreen,
+                .ForeColor = Color.White,
+                .FlatStyle = FlatStyle.Flat,
+                .DialogResult = DialogResult.OK
+            }
+            applyButton.FlatAppearance.BorderSize = 0
+            dialog.Controls.Add(applyButton)
+            dialog.AcceptButton = applyButton
+            dialog.CancelButton = cancelButton
+
+            If dialog.ShowDialog(Me) = DialogResult.OK Then
+                selectedCategoryFilters.Clear()
+                For Each item As Object In categoryList.CheckedItems
+                    selectedCategoryFilters.Add(Convert.ToString(item))
+                Next
+
+                categoryFilterButton.Text =
+                    If(selectedCategoryFilters.Count = 0,
+                       "Filter Categories",
+                       "Categories (" & selectedCategoryFilters.Count.ToString() & ")")
+
+                ApplyAssetSearch()
+                statusLabel.Text =
+                    "Showing " & CountVisibleAssets().ToString() &
+                    " of " & assetsGrid.Rows.Count.ToString() & " asset(s)."
+            End If
+        End Using
+    End Sub
+
     Private Sub ApplyAssetSearch()
         Dim query As String = assetSearchInput.Text.Trim()
 
@@ -554,7 +710,7 @@ Public Class FixedAssetsForm
                 Dim category As String =
                     Convert.ToString(row.Cells("category").Value)
 
-                Dim matches As Boolean =
+                Dim matchesSearch As Boolean =
                     String.IsNullOrWhiteSpace(query) OrElse
                     assetCode.IndexOf(
                         query, StringComparison.OrdinalIgnoreCase) >= 0 OrElse
@@ -563,7 +719,11 @@ Public Class FixedAssetsForm
                     category.IndexOf(
                         query, StringComparison.OrdinalIgnoreCase) >= 0
 
-                row.Visible = matches
+                Dim matchesCategory As Boolean =
+                    selectedCategoryFilters.Count = 0 OrElse
+                    selectedCategoryFilters.Contains(category)
+
+                row.Visible = matchesSearch AndAlso matchesCategory
             Next
         Finally
             assetsGrid.ResumeLayout()
@@ -587,7 +747,109 @@ Public Class FixedAssetsForm
         e As EventArgs)
 
         assetSearchInput.Clear()
+        selectedCategoryFilters.Clear()
+        categoryFilterButton.Text = "Filter Categories"
         ApplyAssetSearch()
+        statusLabel.Text =
+            "Showing " & CountVisibleAssets().ToString() &
+            " of " & assetsGrid.Rows.Count.ToString() & " asset(s)."
+    End Sub
+
+    Private Sub CategorySelectButton_Click(sender As Object, e As EventArgs)
+        Using dialog As New Form()
+            dialog.Text = "Select Fixed-Asset Categories"
+            dialog.StartPosition = FormStartPosition.CenterParent
+            dialog.FormBorderStyle = FormBorderStyle.FixedDialog
+            dialog.MinimizeBox = False
+            dialog.MaximizeBox = False
+            dialog.ShowInTaskbar = False
+            dialog.ClientSize = New Size(440, 510)
+            dialog.BackColor = Color.White
+            dialog.Font = New Font("Segoe UI", 9.5F)
+
+            Dim heading As New Label With {
+                .Text = "Select one or more categories",
+                .Font = New Font("Segoe UI", 13.0F, FontStyle.Bold),
+                .ForeColor = deepGreen,
+                .Location = New Point(18, 16),
+                .Size = New Size(400, 28)
+            }
+            dialog.Controls.Add(heading)
+
+            Dim hint As New Label With {
+                .Text = "Check every category that applies to this asset.",
+                .ForeColor = Color.FromArgb(95, 115, 101),
+                .Location = New Point(18, 47),
+                .Size = New Size(400, 25)
+            }
+            dialog.Controls.Add(hint)
+
+            Dim categoryList As New CheckedListBox With {
+                .Location = New Point(18, 78),
+                .Size = New Size(404, 335),
+                .CheckOnClick = True,
+                .BorderStyle = BorderStyle.FixedSingle,
+                .Font = New Font("Segoe UI", 9.5F),
+                .IntegralHeight = False
+            }
+
+            For Each category As String In assetCategories
+                Dim index As Integer = categoryList.Items.Add(category)
+                If selectedAssetCategories.Contains(category) Then
+                    categoryList.SetItemChecked(index, True)
+                End If
+            Next
+            dialog.Controls.Add(categoryList)
+
+            Dim selectAllButton As New Button With {
+                .Text = "Select All",
+                .Location = New Point(18, 438),
+                .Size = New Size(95, 34),
+                .FlatStyle = FlatStyle.Flat
+            }
+            AddHandler selectAllButton.Click,
+                Sub()
+                    For i As Integer = 0 To categoryList.Items.Count - 1
+                        categoryList.SetItemChecked(i, True)
+                    Next
+                End Sub
+            dialog.Controls.Add(selectAllButton)
+
+            Dim cancelButton As New Button With {
+                .Text = "Cancel",
+                .Location = New Point(230, 438),
+                .Size = New Size(85, 34),
+                .DialogResult = DialogResult.Cancel,
+                .FlatStyle = FlatStyle.Flat
+            }
+            dialog.Controls.Add(cancelButton)
+
+            Dim applyButton As New Button With {
+                .Text = "Apply",
+                .Location = New Point(327, 438),
+                .Size = New Size(95, 34),
+                .BackColor = primaryGreen,
+                .ForeColor = Color.White,
+                .FlatStyle = FlatStyle.Flat,
+                .DialogResult = DialogResult.OK
+            }
+            applyButton.FlatAppearance.BorderSize = 0
+            dialog.Controls.Add(applyButton)
+            dialog.AcceptButton = applyButton
+            dialog.CancelButton = cancelButton
+
+            If dialog.ShowDialog(Me) = DialogResult.OK Then
+                selectedAssetCategories.Clear()
+                For Each item As Object In categoryList.CheckedItems
+                    selectedAssetCategories.Add(Convert.ToString(item))
+                Next
+                UpdateCategoryDisplay()
+            End If
+        End Using
+    End Sub
+
+    Private Sub UpdateCategoryDisplay()
+        categoryInput.Text = String.Join(", ", selectedAssetCategories)
     End Sub
 
     Private Async Sub SaveButton_Click(sender As Object, e As EventArgs)
@@ -611,8 +873,8 @@ Public Class FixedAssetsForm
             Return
         End If
 
-        If categoryInput.SelectedIndex < 0 Then
-            ShowValidation("Select a fixed-asset category.")
+        If selectedAssetCategories.Count = 0 Then
+            ShowValidation("Select at least one fixed-asset category.")
             Return
         End If
 
@@ -656,7 +918,7 @@ Public Class FixedAssetsForm
 
         Dim payload As New Dictionary(Of String, Object) From {
             {"name", nameInput.Text.Trim()},
-            {"category", categoryInput.SelectedItem.ToString()},
+            {"category", String.Join(" | ", selectedAssetCategories)},
             {"acquisition_cost", cost},
             {"useful_life_years", usefulLife},
             {"salvage_value", salvage},
@@ -904,17 +1166,18 @@ Public Class FixedAssetsForm
                     nameInput.Text = JsonText(asset, "name")
 
                     Dim category As String = JsonText(asset, "category")
-                    Dim categoryIndex As Integer =
-                        categoryInput.FindStringExact(category)
+                    selectedAssetCategories.Clear()
 
-                    If categoryIndex >= 0 Then
-                        categoryInput.SelectedIndex = categoryIndex
-                    ElseIf Not String.IsNullOrWhiteSpace(category) Then
-                        categoryInput.Items.Add(category)
-                        categoryInput.SelectedItem = category
-                    Else
-                        categoryInput.SelectedIndex = -1
-                    End If
+                    For Each savedCategory As String In
+                        category.Split(New String() {"|"}, StringSplitOptions.RemoveEmptyEntries)
+                        Dim normalizedCategory As String = savedCategory.Trim()
+                        If normalizedCategory.Length > 0 AndAlso
+                           Not selectedAssetCategories.Contains(normalizedCategory) Then
+                            selectedAssetCategories.Add(normalizedCategory)
+                        End If
+                    Next
+
+                    UpdateCategoryDisplay()
 
                     Dim acquisitionDate As String =
                         JsonText(asset, "acquisition_date").Trim()
@@ -1044,7 +1307,8 @@ Public Class FixedAssetsForm
         assetCodeInput.Clear()
         assetCodeInput.PlaceholderText = "Generated automatically when saved"
         nameInput.Clear()
-        categoryInput.SelectedIndex = -1
+        selectedAssetCategories.Clear()
+        UpdateCategoryDisplay()
 
         acquisitionDateInput.Value = DateTime.Today
         acquisitionDateInput.Checked = False
@@ -1068,6 +1332,7 @@ Public Class FixedAssetsForm
         assetCodeInput.Enabled = enabled
         nameInput.Enabled = enabled
         categoryInput.Enabled = enabled
+        categorySelectButton.Enabled = enabled
         acquisitionDateInput.Enabled = enabled
         acquisitionCostInput.Enabled = enabled
         usefulLifeInput.Enabled = enabled
