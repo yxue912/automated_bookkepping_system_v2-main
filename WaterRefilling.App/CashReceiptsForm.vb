@@ -5,8 +5,11 @@ Imports System.Text.Json
 Imports System.Text.Json.Serialization
 Imports System.Globalization
 Imports System.Windows.Forms
+Imports System.Drawing.Printing
 Imports System.Linq
 Imports System.Collections.Generic
+Imports System.IO
+Imports System.Text
 Imports System.Threading.Tasks
 
 Public Class CashReceiptsForm
@@ -25,6 +28,10 @@ Public Class CashReceiptsForm
     Private ReadOnly saveButton As New Button()
     Private ReadOnly refreshButton As New Button()
     Private ReadOnly postButton As New Button()
+    Private ReadOnly printReceiptButton As New Button()
+    Private ReadOnly previewReceiptButton As New Button()
+    Private ReadOnly receiptPrintDocument As New PrintDocument()
+    Private selectedReceiptForPrint As Dictionary(Of String, String)
 
     Private ReadOnly jsonOptions As New JsonSerializerOptions With {
         .PropertyNameCaseInsensitive = True
@@ -250,6 +257,34 @@ Public Class CashReceiptsForm
         postButton.Enabled = False
         AddHandler postButton.Click, AddressOf PostReceiptClicked
 
+        previewReceiptButton.Text = "Preview Receipt"
+        previewReceiptButton.Width = 120
+        previewReceiptButton.Height = 32
+        previewReceiptButton.BackColor = Color.FromArgb(31, 78, 121)
+        previewReceiptButton.ForeColor = Color.White
+        previewReceiptButton.FlatStyle = FlatStyle.Flat
+        previewReceiptButton.FlatAppearance.BorderSize = 0
+        AddHandler previewReceiptButton.Click, AddressOf PreviewSelectedReceiptClicked
+
+        printReceiptButton.Text = "Save PDF / Print"
+        printReceiptButton.Width = 125
+        printReceiptButton.Height = 32
+        printReceiptButton.BackColor = Color.FromArgb(31, 78, 121)
+        printReceiptButton.ForeColor = Color.White
+        printReceiptButton.FlatStyle = FlatStyle.Flat
+        printReceiptButton.FlatAppearance.BorderSize = 0
+        AddHandler printReceiptButton.Click, AddressOf PrintSelectedReceiptClicked
+
+        AddHandler receiptPrintDocument.PrintPage, AddressOf ReceiptPrintDocument_PrintPage
+        receiptPrintDocument.DocumentName = "Aqua ARC Cash Receipt"
+        receiptPrintDocument.DefaultPageSettings.Margins = New Margins(12, 12, 12, 12)
+        receiptPrintDocument.DefaultPageSettings.Landscape = False
+        Try
+            receiptPrintDocument.DefaultPageSettings.PaperSize = New PaperSize("Aqua ARC Receipt 80mm", 315, 650)
+        Catch
+            ' Use the printer's default paper size if custom receipt paper is unsupported.
+        End Try
+
         Dim buttons As New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
             .FlowDirection = FlowDirection.RightToLeft,
@@ -257,6 +292,8 @@ Public Class CashReceiptsForm
         }
 
         buttons.Controls.Add(postButton)
+        buttons.Controls.Add(printReceiptButton)
+        buttons.Controls.Add(previewReceiptButton)
         buttons.Controls.Add(saveButton)
         buttons.Controls.Add(refreshButton)
 
@@ -811,6 +848,351 @@ End Function
             refreshButton.Enabled = True
         End Try
     End Sub
+
+    Private Function CaptureSelectedReceipt() As Boolean
+        If receiptsGrid.CurrentRow Is Nothing Then
+            MessageBox.Show("Select a saved receipt from Receipt History first.",
+                            "No Receipt Selected",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information)
+            Return False
+        End If
+
+        Dim row = receiptsGrid.CurrentRow
+        selectedReceiptForPrint = New Dictionary(Of String, String) From {
+            {"ReceiptDate", CellText(row, "ReceiptDate")},
+            {"OrNumber", CellText(row, "OrNumber")},
+            {"Payor", CellText(row, "Payor")},
+            {"GlAccount", CellText(row, "GlAccount")},
+            {"DepositAccount", CellText(row, "DepositAccount")},
+            {"Amount", CellText(row, "Amount")},
+            {"Bank", CellText(row, "Bank")},
+            {"Status", CellText(row, "Status")}
+        }
+        Return True
+    End Function
+
+    Private Sub PreviewSelectedReceiptClicked(sender As Object, e As EventArgs)
+        If Not CaptureSelectedReceipt() Then Return
+
+        Using preview As New PrintPreviewDialog()
+            preview.Document = receiptPrintDocument
+            preview.Width = 900
+            preview.Height = 700
+            preview.StartPosition = FormStartPosition.CenterParent
+            preview.Text = "Aqua ARC - Cash Receipt Preview"
+            Try
+                preview.ShowDialog(Me)
+            Catch ex As Exception
+                MessageBox.Show("Could not preview the selected receipt: " & ex.Message,
+                                "Receipt Preview Failed",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error)
+            End Try
+        End Using
+    End Sub
+
+    Private Sub PrintSelectedReceiptClicked(sender As Object, e As EventArgs)
+        If Not CaptureSelectedReceipt() Then Return
+
+        Using dialog As New SaveFileDialog()
+            dialog.Title = "Save Cash Receipt as PDF"
+            dialog.Filter = "PDF files (*.pdf)|*.pdf"
+            dialog.FileName = "CashReceipt_" & SafeFileName(ValueForPrint("OrNumber")) & ".pdf"
+            dialog.DefaultExt = "pdf"
+            dialog.AddExtension = True
+
+            If dialog.ShowDialog(Me) <> DialogResult.OK Then Return
+
+            Try
+                CreateCompactReceiptPdf(dialog.FileName)
+                MessageBox.Show("Receipt PDF saved successfully:" & Environment.NewLine & dialog.FileName,
+                                "PDF Saved",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information)
+            Catch ex As Exception
+                MessageBox.Show("Could not save the receipt PDF: " & ex.Message,
+                                "PDF Export Failed",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error)
+            End Try
+        End Using
+    End Sub
+
+    Private Function SafeFileName(value As String) As String
+        If String.IsNullOrWhiteSpace(value) Then Return DateTime.Now.ToString("yyyyMMdd_HHmmss")
+        Dim result = value
+        For Each invalidChar In Path.GetInvalidFileNameChars()
+            result = result.Replace(invalidChar, "_"c)
+        Next
+        Return result.Trim()
+    End Function
+
+    Private Function PdfSafeText(value As String) As String
+        If String.IsNullOrWhiteSpace(value) Then Return "—"
+        ' The built-in PDF Helvetica font uses WinAnsi. Replace the peso symbol with PHP
+        ' to keep the generated PDF portable without an external font dependency.
+        Dim result = value.Replace("₱", "PHP ")
+        result = result.Replace("—", "-").Replace("–", "-").Replace("’", "'").Replace("“", """").Replace("”", """")
+        Dim sb As New StringBuilder()
+        For Each ch As Char In result
+            If AscW(ch) >= 32 AndAlso AscW(ch) <= 255 Then
+                sb.Append(ch)
+            ElseIf ch = vbCr OrElse ch = vbLf OrElse ch = vbTab Then
+                sb.Append(" ")
+            Else
+                sb.Append("?")
+            End If
+        Next
+        Return sb.ToString()
+    End Function
+
+    Private Function PdfEscape(value As String) As String
+        Return PdfSafeText(value).Replace("\", "\\").Replace("(", "\(").Replace(")", "\)")
+    End Function
+
+    Private Sub CreateCompactReceiptPdf(filePath As String)
+        If selectedReceiptForPrint Is Nothing Then Throw New InvalidOperationException("No receipt is selected.")
+
+        ' 80 mm width = 226.77 PDF points. Page height is computed from the content,
+        ' so the saved PDF does not retain an A4 or fixed-height blank area.
+        Dim pageWidth As Double = 226.77
+        Dim margin As Double = 15
+        Dim contentWidth As Double = pageWidth - (margin * 2)
+        Dim lines As New List(Of KeyValuePair(Of String, String)) From {
+            New KeyValuePair(Of String, String)("Date", ValueForPrint("ReceiptDate")),
+            New KeyValuePair(Of String, String)("OR No.", ValueForPrint("OrNumber")),
+            New KeyValuePair(Of String, String)("Received From", ValueForPrint("Payor")),
+            New KeyValuePair(Of String, String)("GL Account", ValueForPrint("GlAccount")),
+            New KeyValuePair(Of String, String)("Deposit Account", ValueForPrint("DepositAccount")),
+            New KeyValuePair(Of String, String)("Bank", ValueForPrint("Bank")),
+            New KeyValuePair(Of String, String)("Status", ValueForPrint("Status"))
+        }
+
+        Dim pageHeight As Double = 150 + (lines.Count * 31)
+        For Each item In lines
+            Dim value = PdfSafeText(item.Value)
+            If value.Length > 28 Then pageHeight += 12
+        Next
+
+        Dim amount As Decimal
+        Dim amountRaw = ValueForPrint("Amount")
+        Dim amountText As String
+        If Decimal.TryParse(amountRaw, NumberStyles.Any, CultureInfo.CurrentCulture, amount) OrElse
+           Decimal.TryParse(amountRaw, NumberStyles.Any, CultureInfo.InvariantCulture, amount) Then
+            amountText = "PHP " & amount.ToString("#,##0.00", CultureInfo.InvariantCulture)
+        Else
+            amountText = amountRaw
+        End If
+
+        Dim commands As New StringBuilder()
+        Dim y As Double = pageHeight - 26
+
+        commands.AppendLine("BT /F1 13 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          73, y, PdfEscape("AQUA ARC")))
+        y -= 16
+        commands.AppendLine("BT /F1 9 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          66, y, PdfEscape("CASH RECEIPT")))
+        y -= 9
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "0.12 0.31 0.47 RG 0.7 w {0:0.##} {1:0.##} m {2:0.##} {1:0.##} l S",
+                                          margin, y, pageWidth - margin))
+        y -= 15
+
+        For Each item In lines
+            commands.AppendLine("BT /F2 8 Tf")
+            commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                              margin, y, PdfEscape(item.Key)))
+            y -= 10
+            commands.AppendLine("BT /F1 8 Tf")
+            Dim value = PdfSafeText(item.Value)
+            If value.Length > 28 Then
+                Dim chunks As New List(Of String)
+                For i As Integer = 0 To value.Length - 1 Step 28
+                    chunks.Add(value.Substring(i, Math.Min(28, value.Length - i)))
+                Next
+                For Each chunk In chunks
+                    commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj",
+                                                      margin, y, PdfEscape(chunk)))
+                    y -= 10
+                Next
+                commands.AppendLine("ET")
+            Else
+                commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                                  margin, y, PdfEscape(value)))
+                y -= 13
+            End If
+        Next
+
+        y -= 2
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "0.12 0.31 0.47 RG 0.7 w {0:0.##} {1:0.##} m {2:0.##} {1:0.##} l S",
+                                          margin, y, pageWidth - margin))
+        y -= 15
+        commands.AppendLine("BT /F2 8 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          margin, y, PdfEscape("TOTAL RECEIVED")))
+        y -= 17
+        commands.AppendLine("BT /F2 11 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          margin, y, PdfEscape(amountText)))
+        y -= 18
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "0.5 G 0.5 w {0:0.##} {1:0.##} m {2:0.##} {1:0.##} l S",
+                                          margin, y, pageWidth - margin))
+        y -= 15
+        commands.AppendLine("BT /F1 7 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          margin, y, PdfEscape("Authorized Staff / Received By")))
+        y -= 17
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "0.5 G 0.5 w {0:0.##} {1:0.##} m {2:0.##} {1:0.##} l S",
+                                          margin, y, pageWidth - margin))
+        y -= 12
+        commands.AppendLine("BT /F1 6 Tf")
+        commands.AppendLine(String.Format(CultureInfo.InvariantCulture, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj ET",
+                                          margin, y, PdfEscape("Generated from Aqua ARC saved receipt.")))
+
+        Dim contentBytes = Encoding.Latin1.GetBytes(commands.ToString())
+        Dim objects As New List(Of Byte())()
+        objects.Add(Encoding.ASCII.GetBytes("<< /Type /Catalog /Pages 2 0 R >>"))
+        objects.Add(Encoding.ASCII.GetBytes("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"))
+        objects.Add(Encoding.ASCII.GetBytes(String.Format(CultureInfo.InvariantCulture,
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {0:0.##} {1:0.##}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
+            pageWidth, pageHeight)))
+        objects.Add(Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"))
+        objects.Add(Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"))
+        Using stream As New MemoryStream()
+            Dim header = Encoding.ASCII.GetBytes("%PDF-1.4" & vbLf & "%âãÏÓ" & vbLf)
+            stream.Write(header, 0, header.Length)
+            Dim offsets As New List(Of Long) From {0}
+            For i As Integer = 0 To objects.Count - 1
+                offsets.Add(stream.Position)
+                Dim objHead = Encoding.ASCII.GetBytes((i + 1).ToString() & " 0 obj" & vbLf)
+                stream.Write(objHead, 0, objHead.Length)
+                stream.Write(objects(i), 0, objects(i).Length)
+                Dim objTail = Encoding.ASCII.GetBytes(vbLf & "endobj" & vbLf)
+                stream.Write(objTail, 0, objTail.Length)
+            Next
+            offsets.Add(stream.Position)
+            Dim contentHeader = Encoding.ASCII.GetBytes("6 0 obj" & vbLf & "<< /Length " & contentBytes.Length.ToString(CultureInfo.InvariantCulture) & " >>" & vbLf & "stream" & vbLf)
+            stream.Write(contentHeader, 0, contentHeader.Length)
+            stream.Write(contentBytes, 0, contentBytes.Length)
+            Dim contentTail = Encoding.ASCII.GetBytes(vbLf & "endstream" & vbLf & "endobj" & vbLf)
+            stream.Write(contentTail, 0, contentTail.Length)
+            Dim xrefPosition = stream.Position
+            Dim xref As New StringBuilder()
+            xref.AppendLine("xref")
+            xref.AppendLine("0 7")
+            xref.AppendLine("0000000000 65535 f ")
+            For i As Integer = 1 To 6
+                xref.AppendLine(offsets(i).ToString("0000000000", CultureInfo.InvariantCulture) & " 00000 n ")
+            Next
+            xref.AppendLine("trailer")
+            xref.AppendLine("<< /Size 7 /Root 1 0 R >>")
+            xref.AppendLine("startxref")
+            xref.AppendLine(xrefPosition.ToString(CultureInfo.InvariantCulture))
+            xref.Append("%%EOF")
+            Dim xrefBytes = Encoding.ASCII.GetBytes(xref.ToString())
+            stream.Write(xrefBytes, 0, xrefBytes.Length)
+            File.WriteAllBytes(filePath, stream.ToArray())
+        End Using
+    End Sub
+
+    Private Function CellText(row As DataGridViewRow, columnName As String) As String
+        Dim value As Object = row.Cells(columnName).Value
+        If value Is Nothing OrElse value Is DBNull.Value Then Return String.Empty
+        Return value.ToString()
+    End Function
+
+    Private Sub ReceiptPrintDocument_PrintPage(sender As Object, e As PrintPageEventArgs)
+        If selectedReceiptForPrint Is Nothing Then
+            e.HasMorePages = False
+            Return
+        End If
+
+        Dim g = e.Graphics
+        g.PageUnit = GraphicsUnit.Display
+        Dim left As Single = e.MarginBounds.Left
+        Dim top As Single = e.MarginBounds.Top
+        Dim width As Single = e.MarginBounds.Width
+        Dim center As Single = left + width / 2.0F
+        Dim right As Single = left + width
+        Using titleFont As New Font("Arial", 13, FontStyle.Bold),
+              headingFont As New Font("Arial", 8.5F, FontStyle.Bold),
+              bodyFont As New Font("Arial", 8.5F, FontStyle.Regular),
+              smallFont As New Font("Arial", 7, FontStyle.Regular),
+              amountFont As New Font("Arial", 12, FontStyle.Bold),
+              linePen As New Pen(Color.FromArgb(31, 78, 121), 1.0F),
+              headerBrush As New SolidBrush(Color.FromArgb(23, 54, 93)),
+              bodyBrush As New SolidBrush(Color.FromArgb(36, 52, 71)),
+              centerFormat As New StringFormat With {.Alignment = StringAlignment.Center},
+              rightFormat As New StringFormat With {.Alignment = StringAlignment.Far}
+
+            g.DrawString("AQUA ARC", titleFont, headerBrush,
+                         New RectangleF(left, top, width, 22), centerFormat)
+            top += 22
+            g.DrawString("CASH RECEIPT", headingFont, headerBrush,
+                         New RectangleF(left, top, width, 16), centerFormat)
+            top += 20
+            g.DrawLine(linePen, left, top, right, top)
+            top += 8
+
+            Dim rows As New List(Of KeyValuePair(Of String, String)) From {
+                New KeyValuePair(Of String, String)("Date", ValueForPrint("ReceiptDate")),
+                New KeyValuePair(Of String, String)("OR No.", ValueForPrint("OrNumber")),
+                New KeyValuePair(Of String, String)("Received From", ValueForPrint("Payor")),
+                New KeyValuePair(Of String, String)("GL Account", ValueForPrint("GlAccount")),
+                New KeyValuePair(Of String, String)("Deposit Account", ValueForPrint("DepositAccount")),
+                New KeyValuePair(Of String, String)("Bank", ValueForPrint("Bank")),
+                New KeyValuePair(Of String, String)("Status", ValueForPrint("Status"))
+            }
+
+            For Each item In rows
+                g.DrawString(item.Key, headingFont, bodyBrush, left, top)
+                top += 11
+                Dim value = If(String.IsNullOrWhiteSpace(item.Value), "—", item.Value)
+                Dim valueSize = g.MeasureString(value, bodyFont, CInt(Math.Max(60, width)))
+                g.DrawString(value, bodyFont, bodyBrush,
+                             New RectangleF(left, top, width, valueSize.Height + 2))
+                top += Math.Max(13, valueSize.Height + 2)
+                top += 3
+            Next
+
+            top += 2
+            g.DrawLine(linePen, left, top, right, top)
+            top += 8
+            g.DrawString("TOTAL RECEIVED", headingFont, headerBrush, left, top)
+            top += 14
+
+            Dim amountText As String
+            Dim amount As Decimal
+            Dim rawAmount = ValueForPrint("Amount")
+            If Decimal.TryParse(rawAmount, NumberStyles.Any, CultureInfo.CurrentCulture, amount) OrElse
+               Decimal.TryParse(rawAmount, NumberStyles.Any, CultureInfo.InvariantCulture, amount) Then
+                amountText = amount.ToString("C2", CultureInfo.GetCultureInfo("en-PH"))
+            Else
+                amountText = rawAmount
+            End If
+            g.DrawString(amountText, amountFont, headerBrush,
+                         New RectangleF(left, top, width, 22), rightFormat)
+            top += 30
+            g.DrawLine(Pens.Gray, left, top, right, top)
+            top += 16
+            g.DrawString("Authorized Staff / Received By", smallFont, bodyBrush, left, top)
+            top += 28
+            g.DrawLine(Pens.Gray, left, top, right, top)
+            top += 4
+            g.DrawString("Generated from the selected saved receipt in Aqua ARC.",
+                         smallFont, Brushes.Gray, New RectangleF(left, top, width, 20))
+        End Using
+        e.HasMorePages = False
+    End Sub
+
+    Private Function ValueForPrint(key As String) As String
+        If selectedReceiptForPrint Is Nothing OrElse Not selectedReceiptForPrint.ContainsKey(key) Then
+            Return String.Empty
+        End If
+        Return selectedReceiptForPrint(key)
+    End Function
 
     Private Sub ClearInputs()
         receiptDatePicker.Value = Date.Today
