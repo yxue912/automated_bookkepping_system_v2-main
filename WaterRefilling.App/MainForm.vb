@@ -337,7 +337,6 @@ Public Sub New()
         financialReportMenuButtons.Add(trialBalanceButton)
 
         AddSidebarButton("Audit Trail")
-        AddSidebarButton("Settings")
         AddSidebarButton("Account Approvals")
 
         ApplyRoleBasedMenuVisibility()
@@ -488,12 +487,6 @@ Public Sub New()
                     Return HasRole("Owner") AndAlso
                         permissions.Contains("audit_logs.view")
 
-                Case "Settings"
-                    Return HasRole("Owner") AndAlso
-                        (permissions.Contains("organization.view") OrElse
-                         permissions.Contains("organization.edit") OrElse
-                         permissions.Contains("system_settings.view") OrElse
-                         permissions.Contains("system_settings.edit"))
             End Select
         End If
 
@@ -515,7 +508,7 @@ Public Sub New()
 
                 Return HasRole("Owner")
 
-            Case "Audit Trail", "Settings", "Account Approvals"
+            Case "Audit Trail", "Account Approvals"
                 Return False
 
             Case Else
@@ -992,7 +985,7 @@ End Sub
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 32))
         root.RowStyles.Add(New RowStyle(SizeType.Absolute, 48))
         root.RowStyles.Add(New RowStyle(SizeType.AutoSize))
-        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 400))
+        root.RowStyles.Add(New RowStyle(SizeType.Absolute, 440))
 
         Dim welcome As New Label With {
             .Text = "Welcome to Aqua ARC!",
@@ -1053,7 +1046,7 @@ End Sub
             .Dock = DockStyle.Fill,
             .BackColor = Color.White,
             .BorderStyle = BorderStyle.None,
-            .Padding = New Padding(14)
+            .Padding = New Padding(14, 14, 14, 18)
         }
 
         AddHandler activityPanel.Paint,
@@ -1083,7 +1076,7 @@ End Sub
             .Name = "activityGrid",
             .Dock = DockStyle.Fill,
             .BackgroundColor = Color.White,
-            .BorderStyle = BorderStyle.None,
+            .BorderStyle = BorderStyle.FixedSingle,
             .ReadOnly = True,
             .AllowUserToAddRows = False,
             .AllowUserToDeleteRows = False,
@@ -1099,6 +1092,17 @@ End Sub
         activityGrid.Columns.Add("description", "Description")
         activityGrid.Columns.Add("amount", "Amount")
         activityGrid.Columns.Add("status", "Status")
+
+        ' Give compact fields predictable space and protect Amount from long descriptions.
+        activityGrid.Columns("reference").FillWeight = 90
+        activityGrid.Columns("date").FillWeight = 95
+        activityGrid.Columns("type").FillWeight = 95
+        activityGrid.Columns("description").FillWeight = 145
+        activityGrid.Columns("amount").FillWeight = 90
+        activityGrid.Columns("status").FillWeight = 90
+        activityGrid.Columns("type").MinimumWidth = 105
+        activityGrid.Columns("description").MinimumWidth = 150
+        activityGrid.Columns("amount").MinimumWidth = 105
         activityGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(228, 245, 232)
         activityGrid.ColumnHeadersDefaultCellStyle.ForeColor = deepGreen
         activityGrid.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 9, FontStyle.Bold)
@@ -1339,11 +1343,39 @@ End Sub
                                     parsedDate.ToString("MMM dd, yyyy")
                             End If
 
+                            Dim activityType As String =
+                                ReadJsonText(activity, "type")
+
+                            Dim displayType As String = activityType
+                            Select Case activityType.Replace(" ", "").ToLowerInvariant()
+                                Case "cashreceipt", "cashreceipts"
+                                    displayType = "Cash Receipt"
+                                Case "cashdisbursement", "cashdisbursements"
+                                    displayType = "Cash Disbursement"
+                                Case "journalentry", "journalentries"
+                                    displayType = "Journal Entry"
+                            End Select
+
+                            Dim displayDescription As String =
+                                ReadJsonText(activity, "description")
+                            Select Case activityType.Replace(" ", "").ToLowerInvariant()
+                                Case "cashreceipt", "cashreceipts"
+                                    displayDescription = "Cash receipt recorded"
+                                Case "cashdisbursement", "cashdisbursements"
+                                    displayDescription = "Cash disbursement recorded"
+                                Case "journalentry", "journalentries"
+                                    displayDescription = "Journal entry recorded"
+                                Case Else
+                                    If String.IsNullOrWhiteSpace(displayDescription) Then
+                                        displayDescription = "Transaction recorded"
+                                    End If
+                            End Select
+
                             activityGrid.Rows.Add(
                                 ReadJsonText(activity, "reference"),
                                 activityDate,
-                                ReadJsonText(activity, "type"),
-                                ReadJsonText(activity, "description"),
+                                displayType,
+                                displayDescription,
                                 FormatPeso(
                                     ReadJsonDecimal(activity, "amount")),
                                 ReadJsonText(activity, "status"))
@@ -1463,20 +1495,6 @@ End Sub
                     settings.ShowDialog(Me)
                 End Using
 
-            Case "Settings"
-                If Not HasRole("Owner") Then
-                    MessageBox.Show(
-                        "Only the Owner can access Business Settings.",
-                        "Access Denied",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning)
-                    Return
-                End If
-
-                Using settings As New OwnerBusinessSettingsForm()
-                    settings.ShowDialog(Me)
-                End Using
-
             Case "Audit Trail"
                 If Not HasRole("Owner") OrElse
                     Not ApiSession.HasServerPermissions OrElse
@@ -1557,16 +1575,17 @@ End Sub
         workspace.Controls.Add(description)
 
         Dim periodLabel As New Label With {
-            .Text = "Period:",
-            .Location = New Point(28, 110),
+            .Text = "Period",
+            .Location = New Point(28, 111),
             .AutoSize = True
         }
 
         workspace.Controls.Add(periodLabel)
 
         Dim periodPicker As New ComboBox With {
-            .Location = New Point(85, 105),
-            .Width = 145,
+            .Location = New Point(95, 104),
+            .Width = 150,
+            .Height = 30,
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
 
@@ -1577,16 +1596,17 @@ End Sub
         workspace.Controls.Add(periodPicker)
 
         Dim dateLabel As New Label With {
-            .Text = "Reference date:",
-            .Location = New Point(250, 110),
+            .Text = "Reference date",
+            .Location = New Point(285, 111),
             .AutoSize = True
         }
 
         workspace.Controls.Add(dateLabel)
 
         Dim datePicker As New DateTimePicker With {
-            .Location = New Point(355, 105),
-            .Width = 180,
+            .Location = New Point(410, 104),
+            .Width = 185,
+            .Height = 30,
             .Format = DateTimePickerFormat.Short,
             .Value = DateTime.Today
         }
@@ -1595,8 +1615,8 @@ End Sub
 
         Dim refreshButton As New Button With {
             .Text = "Load Report",
-            .Location = New Point(550, 103),
-            .Size = New Size(130, 35),
+            .Location = New Point(615, 102),
+            .Size = New Size(135, 36),
             .BackColor = primaryGreen,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -1608,15 +1628,15 @@ End Sub
 
         Dim searchLabel As New Label With {
             .Text = "Search assets:",
-            .Location = New Point(28, 157),
+            .Location = New Point(28, 160),
             .AutoSize = True
         }
 
         workspace.Controls.Add(searchLabel)
 
         Dim searchBox As New TextBox With {
-            .Location = New Point(125, 152),
-            .Size = New Size(260, 28)
+            .Location = New Point(135, 153),
+            .Size = New Size(270, 30)
         }
 
         searchBox.AccessibleName = "Search assets"
@@ -1626,8 +1646,8 @@ End Sub
 
         Dim clearSearchButton As New Button With {
             .Text = "Clear Search",
-            .Location = New Point(395, 150),
-            .Size = New Size(110, 32),
+            .Location = New Point(420, 151),
+            .Size = New Size(110, 34),
             .BackColor = Color.White,
             .ForeColor = deepGreen,
             .FlatStyle = FlatStyle.Flat,
@@ -1639,7 +1659,7 @@ End Sub
 
         Dim matchCountLabel As New Label With {
             .Text = "Matching assets: 0",
-            .Location = New Point(520, 157),
+            .Location = New Point(550, 160),
             .AutoSize = True,
             .ForeColor = deepGreen,
             .Font = New Font("Segoe UI", 9, FontStyle.Bold)
@@ -1649,7 +1669,7 @@ End Sub
 
         Dim statusLabel As New Label With {
             .Text = "Choose a reporting period and date.",
-            .Location = New Point(28, 190),
+            .Location = New Point(28, 199),
             .AutoSize = True,
             .ForeColor = Color.Gray
         }
@@ -1657,14 +1677,15 @@ End Sub
         workspace.Controls.Add(statusLabel)
 
         Dim reportGrid As New DataGridView With {
-            .Location = New Point(25, 220),
-            .Size = New Size(1100, 385),
+            .Location = New Point(25, 232),
+            .Size = New Size(Math.Max(700, workspace.ClientSize.Width - 55),
+                             Math.Max(260, workspace.ClientSize.Height - 255)),
             .Anchor = AnchorStyles.Top Or
                       AnchorStyles.Bottom Or
                       AnchorStyles.Left Or
                       AnchorStyles.Right,
             .BackgroundColor = Color.White,
-            .BorderStyle = BorderStyle.None,
+            .BorderStyle = BorderStyle.FixedSingle,
             .ReadOnly = True,
             .AllowUserToAddRows = False,
             .AllowUserToDeleteRows = False,
@@ -1690,10 +1711,22 @@ End Sub
 
         reportGrid.ColumnHeadersDefaultCellStyle.ForeColor = deepGreen
         reportGrid.EnableHeadersVisualStyles = False
-        reportGrid.ColumnHeadersHeight = 40
-        reportGrid.RowTemplate.Height = 32
+        reportGrid.ColumnHeadersHeight = 42
+        reportGrid.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 9, FontStyle.Bold)
+        reportGrid.DefaultCellStyle.Font = New Font("Segoe UI", 9, FontStyle.Regular)
+        reportGrid.DefaultCellStyle.Padding = New Padding(4, 2, 4, 2)
+        reportGrid.RowTemplate.Height = 34
+        reportGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None
+        reportGrid.DefaultCellStyle.SelectionBackColor = primaryGreen
+        reportGrid.DefaultCellStyle.SelectionForeColor = Color.White
 
         workspace.Controls.Add(reportGrid)
+
+        AddHandler workspace.Resize,
+            Sub(sender, e)
+                reportGrid.Width = Math.Max(700, workspace.ClientSize.Width - 55)
+                reportGrid.Height = Math.Max(260, workspace.ClientSize.Height - 255)
+            End Sub
 
         Dim loadReport As Func(Of Task) =
             Async Function()
