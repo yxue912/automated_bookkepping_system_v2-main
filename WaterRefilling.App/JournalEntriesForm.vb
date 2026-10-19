@@ -31,7 +31,6 @@ Public Class JournalEntriesForm
         InitializeComponent()
         ConfigureEntriesGrid()
         ConfigureLinesGrid()
-        CsvExportMenu.Attach(Me, Tuple.Create("Journal Entries", entriesGrid), Tuple.Create("Selected Entry Lines", linesGrid))
 
         AddHandler Me.Load, AddressOf JournalEntriesForm_Load
         AddHandler refreshButton.Click, AddressOf RefreshButton_Click
@@ -64,6 +63,15 @@ Public Class JournalEntriesForm
         postButton.Size = New Size(130, 35)
         postButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         StyleButton(postButton, Color.FromArgb(35, 90, 60))
+
+        Dim exportEntriesButton = CsvExportMenu.CreateExportButton(Me, entriesGrid, "Journal Entries")
+        exportEntriesButton.Location = New Point(625, 20)
+        exportEntriesButton.Size = New Size(135, 35)
+        exportEntriesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        Dim exportLinesButton = CsvExportMenu.CreateExportButton(Me, linesGrid, "Selected Entry Lines")
+        exportLinesButton.Location = New Point(765, 20)
+        exportLinesButton.Size = New Size(140, 35)
+        exportLinesButton.Anchor = AnchorStyles.Top Or AnchorStyles.Right
         postButton.Enabled = False
 
         statusLabel.Location = New Point(20, 60)
@@ -102,6 +110,8 @@ Public Class JournalEntriesForm
         Me.Controls.Add(titleLabel)
         Me.Controls.Add(refreshButton)
         Me.Controls.Add(postButton)
+        Me.Controls.Add(exportEntriesButton)
+        Me.Controls.Add(exportLinesButton)
         Me.Controls.Add(statusLabel)
         Me.Controls.Add(entriesLabel)
         Me.Controls.Add(entriesGrid)

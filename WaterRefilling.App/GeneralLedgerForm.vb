@@ -38,7 +38,6 @@ Public Class GeneralLedgerForm
         Me.Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
-        CsvExportMenu.Attach(Me, Tuple.Create("Ledger Accounts", accountsGrid), Tuple.Create("General Ledger Entries", entriesGrid))
 
         AddHandler Me.Load, AddressOf LoadAccountsAsync
         AddHandler searchButton.Click, AddressOf SearchButtonClicked
@@ -70,6 +69,13 @@ Public Class GeneralLedgerForm
             .ForeColor = Color.FromArgb(37, 91, 64),
             .TextAlign = ContentAlignment.MiddleLeft
         }
+        Dim titleBar As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 3, .RowCount = 1}
+        titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
+        titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        titleBar.ColumnStyles.Add(New ColumnStyle(SizeType.AutoSize))
+        titleBar.Controls.Add(title, 0, 0)
+        titleBar.Controls.Add(CsvExportMenu.CreateExportButton(Me, accountsGrid, "Ledger Accounts"), 1, 0)
+        titleBar.Controls.Add(CsvExportMenu.CreateExportButton(Me, entriesGrid, "Ledger Entries"), 2, 0)
 
         Dim filters As New TableLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -200,7 +206,7 @@ Public Class GeneralLedgerForm
         entryPanel.Controls.Add(entryTitle)
         entriesGrid.BringToFront()
 
-        root.Controls.Add(title, 0, 0)
+        root.Controls.Add(titleBar, 0, 0)
         root.Controls.Add(filters, 0, 1)
         root.Controls.Add(searchPanel, 0, 2)
         root.Controls.Add(accountPanel, 0, 3)

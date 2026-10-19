@@ -115,7 +115,6 @@ Public Class CashDisbursementsForm
         Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
-        CsvExportMenu.Attach(Me, Tuple.Create("Cash Disbursements", disbursementsGrid))
         AddHandler Shown, AddressOf FormShown
     End Sub
 
@@ -258,6 +257,7 @@ Public Class CashDisbursementsForm
             .WrapContents = False
         }
 
+        buttons.Controls.Add(CsvExportMenu.CreateExportButton(Me, disbursementsGrid, "Cash Disbursements"))
         buttons.Controls.Add(saveButton)
         buttons.Controls.Add(refreshButton)
         buttons.Controls.Add(previewVoucherButton)

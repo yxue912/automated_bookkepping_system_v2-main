@@ -93,7 +93,8 @@ Public Class AuditTrailForm
             filterBox,
             refreshButton,
             previousButton,
-            nextButton
+            nextButton,
+            CsvExportMenu.CreateExportButton(Me, grid, "Current Audit Trail Page")
         })
 
         grid.Dock = DockStyle.Fill
@@ -112,7 +113,6 @@ Public Class AuditTrailForm
         statusLabel.Text = "Loading audit records..."
 
         Controls.Add(grid)
-        CsvExportMenu.Attach(Me, Tuple.Create("Current Audit Trail Page", grid))
         Controls.Add(statusLabel)
         Controls.Add(top)
 

@@ -35,7 +35,6 @@ Public Class TrialBalanceForm
         Me.Font = New Font("Segoe UI", 9.0F)
 
         BuildInterface()
-        CsvExportMenu.Attach(Me, Tuple.Create("Trial Balance", reportGrid))
 
         AddHandler Me.Load, AddressOf FormLoaded
         AddHandler refreshButton.Click, AddressOf RefreshButtonClicked
@@ -79,6 +78,7 @@ Public Class TrialBalanceForm
         Dim toolbar As New Panel With {
             .Dock = DockStyle.Fill
         }
+        toolbar.Controls.Add(CsvExportMenu.CreateExportButton(Me, reportGrid, "Trial Balance"))
         toolbar.Controls.Add(refreshButton)
 
         Dim searchPanel As New TableLayoutPanel With {

@@ -75,7 +75,6 @@ Public Class FixedAssetsForm
         Me.AutoScaleMode = AutoScaleMode.Dpi
 
         BuildInterface()
-        CsvExportMenu.Attach(Me, Tuple.Create("Fixed Assets", assetsGrid))
 
         AddHandler Me.Shown, AddressOf FixedAssetsForm_Shown
     End Sub
@@ -320,6 +319,7 @@ Public Class FixedAssetsForm
         clearButton.Width = 95
         refreshButton.Width = 100
 
+        buttonFlow.Controls.Add(CsvExportMenu.CreateExportButton(Me, assetsGrid, "Fixed Assets"))
         buttonFlow.Controls.Add(refreshButton)
         buttonFlow.Controls.Add(clearButton)
         buttonFlow.Controls.Add(deleteButton)
