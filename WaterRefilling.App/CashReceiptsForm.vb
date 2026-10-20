@@ -907,7 +907,7 @@ End Function
 
             Try
                 CreateCompactReceiptPdf(dialog.FileName)
-                MessageBox.Show("Receipt PDF saved successfully:" & Environment.NewLine & dialog.FileName,
+                MessageBox.Show("Cash Receipt Successfully Saved",
                                 "PDF Saved",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Information)

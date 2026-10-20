@@ -30,7 +30,7 @@ use App\Http\Controllers\Api\LapsingScheduleController;
 */
 
 Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('throttle:5,1');
+    ->middleware('throttle:10,1');
 
 Route::post('/register', [AuthController::class, 'register'])
     ->middleware('throttle:5,1');

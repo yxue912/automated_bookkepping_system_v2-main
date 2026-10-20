@@ -331,8 +331,22 @@ Public Class CashDisbursementsForm
     End Function
 
     Private Function GridCellText(row As DataGridViewRow, columnName As String) As String
-        If Not disbursementsGrid.Columns.Contains(columnName) Then Return ""
-        Dim value = row.Cells(columnName).Value
+        ' Grid column Name values are display labels (for example, "Expense Account"),
+        ' while DataPropertyName values are the actual bound fields ("ExpenseAccountName").
+        ' Resolve either form so the voucher reads the exact values shown in History.
+        Dim targetColumn As DataGridViewColumn = Nothing
+
+        If disbursementsGrid.Columns.Contains(columnName) Then
+            targetColumn = disbursementsGrid.Columns(columnName)
+        Else
+            targetColumn = disbursementsGrid.Columns.Cast(Of DataGridViewColumn)().
+                FirstOrDefault(Function(c) String.Equals(c.DataPropertyName, columnName,
+                    StringComparison.OrdinalIgnoreCase))
+        End If
+
+        If targetColumn Is Nothing Then Return ""
+
+        Dim value = row.Cells(targetColumn.Index).Value
         If value Is Nothing OrElse value Is DBNull.Value Then Return ""
         Return Convert.ToString(value, CultureInfo.CurrentCulture)
     End Function
