@@ -34,10 +34,7 @@ class CashDisbursementController extends Controller
         ]);
     }
 
-    public function store(
-        Request $request,
-        JournalEntryService $journalEntryService
-    ): JsonResponse {
+    public function store(Request $request): JsonResponse {
         $validated = $request->validate([
             'disbursement_date' => ['required', 'date'],
             'payee' => ['required', 'string', 'max:150'],
@@ -67,17 +64,11 @@ class CashDisbursementController extends Controller
                 'prohibited_unless:payment_method,Check',
             ],
             'remarks' => ['nullable', 'string'],
-            'post_now' => ['sometimes', 'boolean'],
         ]);
-
-        $postNow = (bool) ($validated['post_now'] ?? false);
-        unset($validated['post_now']);
 
         $disbursement = DB::transaction(function () use (
             $validated,
-            $request,
-            $journalEntryService,
-            $postNow
+            $request
         ) {
             $debitAccount = Account::whereKey($validated['account_id'])
                 ->where('is_active', true)
@@ -149,62 +140,30 @@ class CashDisbursementController extends Controller
                 ],
             ]);
 
-            if ($postNow) {
-                abort_unless(
-                    $request->user() &&
-                    $request->user()->can(
-                        'cash_disbursements.approve'
-                    ),
-                    403
-                );
-
-                $journalEntryService->post($entry);
-                $disbursement->update(['status' => 'Posted']);
-            }
-
             return $disbursement->load([
                 'account',
                 'paymentAccount',
             ]);
         });
 
-        if ($postNow) {
-            $user = $request->user();
-
-            AuditLog::create([
-                'user_id' => $user ? $user->id : null,
-                'event' => 'cash_disbursement.posted',
-                'description' => 'Cash disbursement voucher '
-                    . $disbursement->voucher_number
-                    . ' created and posted successfully.',
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'metadata' => [
-                    'cash_disbursement_id' => $disbursement->id,
-                    'voucher_number' => $disbursement->voucher_number,
-                ],
-            ]);
-        } else {
-            AuditLog::create([
-                'user_id' => $request->user()->id,
-                'event' => 'cash_disbursement.created',
-                'description' => 'Cash disbursement voucher '
-                    . $disbursement->voucher_number
-                    . ' created as Draft.',
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'metadata' => [
-                    'cash_disbursement_id' => $disbursement->id,
-                    'voucher_number' => $disbursement->voucher_number,
-                ],
-            ]);
-        }
+        AuditLog::create([
+            'user_id' => $request->user()->id,
+            'event' => 'cash_disbursement.created',
+            'description' => 'Cash disbursement voucher '
+                . $disbursement->voucher_number
+                . ' created as Draft.',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => [
+                'cash_disbursement_id' => $disbursement->id,
+                'voucher_number' => $disbursement->voucher_number,
+                'status' => $disbursement->status,
+            ],
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => $postNow
-                ? 'Cash disbursement created and journal entry posted successfully.'
-                : 'Cash disbursement saved as Draft.',
+            'message' => 'Cash disbursement saved as Draft.',
             'data' => $disbursement,
         ], 201);
     }

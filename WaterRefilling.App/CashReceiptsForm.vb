@@ -27,6 +27,7 @@ Public Class CashReceiptsForm
     Private ReadOnly statusLabel As New Label()
     Private ReadOnly saveButton As New Button()
     Private ReadOnly refreshButton As New Button()
+    Private ReadOnly deleteButton As New Button()
     Private ReadOnly postButton As New Button()
     Private ReadOnly printReceiptButton As New Button()
     Private ReadOnly previewReceiptButton As New Button()
@@ -247,6 +248,16 @@ Public Class CashReceiptsForm
         refreshButton.Height = 32
         AddHandler refreshButton.Click, AddressOf RefreshClicked
 
+        deleteButton.Text = "Delete Selected"
+        deleteButton.Width = 120
+        deleteButton.Height = 32
+        deleteButton.BackColor = Color.Firebrick
+        deleteButton.ForeColor = Color.White
+        deleteButton.FlatStyle = FlatStyle.Flat
+        deleteButton.FlatAppearance.BorderSize = 0
+        deleteButton.Enabled = False
+        AddHandler deleteButton.Click, AddressOf DeleteSelectedReceiptClicked
+
         postButton.Text = "Post Selected"
         postButton.Width = 115
         postButton.Height = 32
@@ -297,6 +308,7 @@ Public Class CashReceiptsForm
         buttons.Controls.Add(previewReceiptButton)
         buttons.Controls.Add(saveButton)
         buttons.Controls.Add(refreshButton)
+        buttons.Controls.Add(deleteButton)
 
         entryPanel.Controls.Add(statusLabel, 0, 4)
         entryPanel.SetColumnSpan(statusLabel, 2)
@@ -384,6 +396,8 @@ Public Class CashReceiptsForm
         })
 
         AddHandler receiptsGrid.SelectionChanged,
+            AddressOf ReceiptSelectionChanged
+        AddHandler receiptsGrid.CellClick,
             AddressOf ReceiptSelectionChanged
 
         Dim listPanel As New Panel With {
@@ -563,6 +577,7 @@ Private Async Function LoadReceiptsAsync() As Task
             receiptsGrid.DataSource = displayRows
 
             UpdatePostButton()
+            UpdateDeleteButton()
 
             SetStatus($"{receipts.Count} receipt(s) loaded.")
         End Using
@@ -574,6 +589,77 @@ End Function
 
     Private Sub ReceiptSelectionChanged(sender As Object, e As EventArgs)
         UpdatePostButton()
+        UpdateDeleteButton()
+    End Sub
+
+    Private Sub UpdateDeleteButton()
+        ' Enable when a row is selected so the user can see why it cannot be deleted.
+        ' DeleteSelectedReceiptClicked still enforces Draft-only deletion before calling the API.
+        deleteButton.Enabled = False
+
+        If receiptsGrid Is Nothing OrElse receiptsGrid.CurrentRow Is Nothing OrElse
+           receiptsGrid.CurrentRow.IsNewRow Then
+            Return
+        End If
+
+        Dim row As DataGridViewRow = receiptsGrid.CurrentRow
+        If row.Cells("Id").Value Is Nothing OrElse
+           row.Cells("Id").Value Is DBNull.Value OrElse
+           String.IsNullOrWhiteSpace(Convert.ToString(row.Cells("Id").Value)) Then
+            Return
+        End If
+
+        deleteButton.Enabled = True
+    End Sub
+
+    Private Async Sub DeleteSelectedReceiptClicked(sender As Object, e As EventArgs)
+        If receiptsGrid.CurrentRow Is Nothing Then
+            MessageBox.Show("Select a receipt from Receipt History first.", "No Entry Selected",
+                MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        Dim row = receiptsGrid.CurrentRow
+        Dim idValue = row.Cells("Id").Value
+        Dim statusValue = Convert.ToString(row.Cells("Status").Value)
+        If idValue Is Nothing OrElse Not String.Equals(statusValue, "Draft", StringComparison.OrdinalIgnoreCase) Then
+            MessageBox.Show("Only Draft receipts can be deleted.", "Cannot Delete Entry",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
+        Dim receiptId As Integer
+        If Not Integer.TryParse(Convert.ToString(idValue), receiptId) Then
+            SetStatus("Could not identify the selected receipt.", True)
+            Return
+        End If
+
+        Dim orNumber = Convert.ToString(row.Cells("OrNumber").Value)
+        If MessageBox.Show("Delete Draft receipt " & orNumber & "?" & Environment.NewLine & Environment.NewLine &
+                           "Its linked Draft journal entry will also be deleted. This cannot be undone.",
+                           "Confirm Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then Return
+
+        Try
+            deleteButton.Enabled = False
+            saveButton.Enabled = False
+            postButton.Enabled = False
+            ApiSession.ApplyAuthorization()
+            Using response As HttpResponseMessage = Await ApiSession.Client.DeleteAsync("cash-receipts/" & receiptId.ToString(CultureInfo.InvariantCulture))
+                Dim body = Await response.Content.ReadAsStringAsync()
+                If Not response.IsSuccessStatusCode Then Throw New Exception(body)
+                Dim result = JsonSerializer.Deserialize(Of ApiResponse(Of Object))(body, jsonOptions)
+                MessageBox.Show(If(String.IsNullOrWhiteSpace(result?.Message), "Draft receipt deleted successfully.", result.Message),
+                    "Entry Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End Using
+            Await LoadReceiptsAsync()
+        Catch ex As Exception
+            SetStatus("Could not delete receipt: " & ex.Message, True)
+            MessageBox.Show(ex.Message, "Delete Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            saveButton.Enabled = True
+            UpdatePostButton()
+            UpdateDeleteButton()
+        End Try
     End Sub
 
     Private Sub UpdatePostButton()
@@ -907,7 +993,7 @@ End Function
 
             Try
                 CreateCompactReceiptPdf(dialog.FileName)
-                MessageBox.Show("Cash Receipt Successfully Saved",
+                MessageBox.Show("Receipt PDF saved successfully:" & Environment.NewLine & dialog.FileName,
                                 "PDF Saved",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Information)

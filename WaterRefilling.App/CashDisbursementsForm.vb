@@ -1,4 +1,4 @@
-﻿Imports System.Drawing
+Imports System.Drawing
 Imports System.Globalization
 Imports System.Linq
 Imports System.Net.Http
@@ -26,6 +26,7 @@ Public Class CashDisbursementsForm
     Private ReadOnly statusLabel As New Label()
     Private ReadOnly saveButton As New Button()
     Private ReadOnly refreshButton As New Button()
+    Private ReadOnly deleteButton As New Button()
     Private ReadOnly previewVoucherButton As New Button()
     Private ReadOnly saveVoucherPdfButton As New Button()
     Private ReadOnly voucherPrintDocument As New PrintDocument()
@@ -71,6 +72,9 @@ Public Class CashDisbursementsForm
     Private Class DisbursementItem
         <JsonPropertyName("id")>
         Public Property Id As Integer
+
+        <JsonPropertyName("status")>
+        Public Property Status As String
 
         <JsonPropertyName("disbursement_date")>
         Public Property DisbursementDate As String
@@ -224,6 +228,16 @@ Public Class CashDisbursementsForm
         refreshButton.Height = 32
         AddHandler refreshButton.Click, AddressOf RefreshClicked
 
+        deleteButton.Text = "Delete Selected"
+        deleteButton.Width = 120
+        deleteButton.Height = 32
+        deleteButton.BackColor = Color.Firebrick
+        deleteButton.ForeColor = Color.White
+        deleteButton.FlatStyle = FlatStyle.Flat
+        deleteButton.FlatAppearance.BorderSize = 0
+        deleteButton.Enabled = False
+        AddHandler deleteButton.Click, AddressOf DeleteSelectedClicked
+
         previewVoucherButton.Text = "Preview Voucher"
         previewVoucherButton.Width = 125
         previewVoucherButton.Height = 32
@@ -260,6 +274,7 @@ Public Class CashDisbursementsForm
         buttons.Controls.Add(CsvExportMenu.CreateExportButton(Me, disbursementsGrid, "Cash Disbursements"))
         buttons.Controls.Add(saveButton)
         buttons.Controls.Add(refreshButton)
+        buttons.Controls.Add(deleteButton)
         buttons.Controls.Add(previewVoucherButton)
         buttons.Controls.Add(saveVoucherPdfButton)
 
@@ -282,7 +297,12 @@ Public Class CashDisbursementsForm
         disbursementsGrid.BorderStyle = BorderStyle.None
         disbursementsGrid.RowHeadersVisible = False
 
+        AddGridColumn("Id", "Id", "ID")
+        disbursementsGrid.Columns("Id").Visible = False
+        AddGridColumn("Status", "Status", "Status")
+        disbursementsGrid.Columns("Status").Visible = False
         AddGridColumn("Date", "DisbursementDate", "Date")
+        AddHandler disbursementsGrid.SelectionChanged, AddressOf DisbursementSelectionChanged
         AddGridColumn("Voucher", "VoucherNumber", "Voucher Number")
         AddGridColumn("Payee", "Payee", "Payee")
         AddGridColumn("Expense Account", "ExpenseAccountName", "Expense Account")
@@ -331,22 +351,8 @@ Public Class CashDisbursementsForm
     End Function
 
     Private Function GridCellText(row As DataGridViewRow, columnName As String) As String
-        ' Grid column Name values are display labels (for example, "Expense Account"),
-        ' while DataPropertyName values are the actual bound fields ("ExpenseAccountName").
-        ' Resolve either form so the voucher reads the exact values shown in History.
-        Dim targetColumn As DataGridViewColumn = Nothing
-
-        If disbursementsGrid.Columns.Contains(columnName) Then
-            targetColumn = disbursementsGrid.Columns(columnName)
-        Else
-            targetColumn = disbursementsGrid.Columns.Cast(Of DataGridViewColumn)().
-                FirstOrDefault(Function(c) String.Equals(c.DataPropertyName, columnName,
-                    StringComparison.OrdinalIgnoreCase))
-        End If
-
-        If targetColumn Is Nothing Then Return ""
-
-        Dim value = row.Cells(targetColumn.Index).Value
+        If Not disbursementsGrid.Columns.Contains(columnName) Then Return ""
+        Dim value = row.Cells(columnName).Value
         If value Is Nothing OrElse value Is DBNull.Value Then Return ""
         Return Convert.ToString(value, CultureInfo.CurrentCulture)
     End Function
@@ -706,6 +712,8 @@ Public Class CashDisbursementsForm
 
                 Dim rows = items.Select(
                     Function(d) New With {
+                        .Id = d.Id,
+                        .Status = If(String.IsNullOrWhiteSpace(d.Status), "Unknown", d.Status),
                         .DisbursementDate = FormatDisbursementDate(d.DisbursementDate),
                         .VoucherNumber = d.VoucherNumber,
                         .Payee = d.Payee,
@@ -792,10 +800,6 @@ Public Class CashDisbursementsForm
                            Nothing, remarksInput.Text.Trim())}
         }
 
-        payload("post_now") = ApiSession.HasServerPermissions AndAlso
-            ApiSession.CurrentUserPermissions.Contains("cash_disbursements.approve") AndAlso
-            ApiSession.CurrentUserPermissions.Contains("cash_disbursements.post")
-
         Try
             saveButton.Enabled = False
             SetStatus("Saving disbursement...")
@@ -843,6 +847,62 @@ Public Class CashDisbursementsForm
                 MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
             saveButton.Enabled = True
+        End Try
+    End Sub
+
+    Private Sub DisbursementSelectionChanged(sender As Object, e As EventArgs)
+        deleteButton.Enabled = False
+        If disbursementsGrid.CurrentRow Is Nothing Then Return
+        Dim statusValue = disbursementsGrid.CurrentRow.Cells("Status").Value
+        deleteButton.Enabled = statusValue IsNot Nothing AndAlso
+            String.Equals(Convert.ToString(statusValue), "Draft", StringComparison.OrdinalIgnoreCase)
+    End Sub
+
+    Private Async Sub DeleteSelectedClicked(sender As Object, e As EventArgs)
+        If disbursementsGrid.CurrentRow Is Nothing Then
+            MessageBox.Show("Select a disbursement from Disbursement History first.",
+                "No Entry Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        Dim row = disbursementsGrid.CurrentRow
+        Dim idValue = row.Cells("Id").Value
+        Dim statusValue = Convert.ToString(row.Cells("Status").Value)
+        If idValue Is Nothing OrElse Not String.Equals(statusValue, "Draft", StringComparison.OrdinalIgnoreCase) Then
+            MessageBox.Show("Only Draft disbursements can be deleted.", "Cannot Delete Entry",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
+        Dim id As Integer
+        If Not Integer.TryParse(Convert.ToString(idValue), id) Then
+            SetStatus("Could not identify the selected disbursement.", True)
+            Return
+        End If
+
+        Dim voucher = GridCellText(row, "Voucher")
+        If MessageBox.Show("Delete Draft disbursement " & voucher & "?" & Environment.NewLine & Environment.NewLine &
+                           "Its linked Draft journal entry will also be deleted. This cannot be undone.",
+                           "Confirm Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then Return
+
+        Try
+            deleteButton.Enabled = False
+            saveButton.Enabled = False
+            ApiSession.ApplyAuthorization()
+            Using response = Await ApiSession.Client.DeleteAsync("cash-disbursements/" & id.ToString(CultureInfo.InvariantCulture))
+                Dim body = Await response.Content.ReadAsStringAsync()
+                If Not response.IsSuccessStatusCode Then Throw New Exception(body)
+                Dim result = JsonSerializer.Deserialize(Of ApiResponse(Of Object))(body, jsonOptions)
+                MessageBox.Show(If(String.IsNullOrWhiteSpace(result?.Message), "Draft disbursement deleted successfully.", result.Message),
+                    "Entry Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End Using
+            Await LoadDisbursementsAsync()
+        Catch ex As Exception
+            SetStatus("Could not delete disbursement: " & ex.Message, True)
+            MessageBox.Show(ex.Message, "Delete Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            saveButton.Enabled = True
+            DisbursementSelectionChanged(Nothing, EventArgs.Empty)
         End Try
     End Sub
 
