@@ -188,6 +188,7 @@ class DatabaseSeeder extends Seeder
             'cash_receipts.submit',
             'cash_receipts.approve',
             'cash_receipts.post',
+            'cash_receipts.delete', // Staff may delete their own Draft receipts
 
             // Cash Disbursements Book
             'cash_disbursements.view',
@@ -197,6 +198,7 @@ class DatabaseSeeder extends Seeder
             'cash_disbursements.submit',
             'cash_disbursements.approve',
             'cash_disbursements.post',
+            'cash_disbursements.delete', // Staff may delete their own Draft disbursements
 
             // RFP
             'rfp.view',
@@ -383,6 +385,7 @@ $ownerRole->syncPermissions($ownerPermissions);
             'cash_receipts.edit',
             'cash_receipts.submit',
             'cash_receipts.post',
+            'cash_receipts.delete', // Staff may delete their own Draft receipts
 
             // Cash Disbursements
             'cash_disbursements.view',
@@ -390,6 +393,7 @@ $ownerRole->syncPermissions($ownerPermissions);
             'cash_disbursements.edit',
             'cash_disbursements.submit',
             'cash_disbursements.post',
+            'cash_disbursements.delete', // Staff may delete their own Draft disbursements
 
             // RFP
             'rfp.view',
